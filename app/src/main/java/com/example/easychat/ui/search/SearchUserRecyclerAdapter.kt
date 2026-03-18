@@ -56,6 +56,8 @@ class SearchUserRecyclerAdapter(
             }
 
             itemView.setOnClickListener {
+                // Bloqueia entrar no próprio chat
+                if (user.id == SupabaseClientProvider.currentUserId()) return@setOnClickListener
                 val intent = Intent(context, ChatActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }

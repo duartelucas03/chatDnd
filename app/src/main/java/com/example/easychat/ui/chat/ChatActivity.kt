@@ -234,6 +234,12 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Garante que mensagens recebidas em background apareçam e o canal realtime esteja ativo
+        viewModel.refreshOnResume()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         if (isRecording) try { mediaRecorder?.stop(); mediaRecorder?.release() } catch (e: Exception) { }

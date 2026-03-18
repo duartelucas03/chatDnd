@@ -1,8 +1,10 @@
 package com.example.easychat.ui.main
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,11 +29,29 @@ class MainActivity : AppCompatActivity() {
     // Launcher para pedir permissão de notificação (Android 13+)
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        // Usuário respondeu — concedeu ou negou. Em ambos os casos, seguimos normalmente.
-        // Se negou, simplesmente não receberá notificações em foreground.
-        // Não precisamos fazer nada aqui além de registrar o token FCM,
-        // pois o canal já foi criado antes da solicitação.
+    ) { /* concedeu ou negou — seguimos normalmente */ }
+
+    // -------------------------------------------------------------------
+    // Launcher de imagem registrado na Activity (não no Fragment) para
+    // evitar IllegalStateException quando o ImagePicker mostra seu diálogo
+    // intermediário e o Fragment passa por mudança de estado do ciclo de vida.
+    // -------------------------------------------------------------------
+    private var onImagePickedCallback: ((Uri) -> Unit)? = null
+
+    val imagePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri = result.data?.data ?: return@registerForActivityResult
+            onImagePickedCallback?.invoke(uri)
+        }
+        onImagePickedCallback = null
+    }
+
+    /** Chamado pelo ProfileFragment para iniciar a seleção de imagem. */
+    fun launchImagePicker(intent: Intent, onPicked: (Uri) -> Unit) {
+        onImagePickedCallback = onPicked
+        imagePickerLauncher.launch(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

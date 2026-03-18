@@ -84,7 +84,12 @@ class ChatViewModel(
     private fun subscribeToRealtime(chatroomId: String) {
         viewModelScope.launch {
             try {
-                realtimeChannel?.let { SupabaseClientProvider.realtime.removeChannel(it) }
+                // Remove canal anterior antes de criar um novo (evita duplicação de eventos)
+                realtimeChannel?.let {
+                    try { SupabaseClientProvider.realtime.removeChannel(it) } catch (e: Exception) { /* ignora */ }
+                }
+                realtimeChannel = null
+
                 val channel = SupabaseClientProvider.realtime
                     .channel("messages_${chatroomId}_${System.currentTimeMillis()}")
                 realtimeChannel = channel
@@ -103,6 +108,28 @@ class ChatViewModel(
                 channel.subscribe()
             } catch (e: Exception) {
                 android.util.Log.e("REALTIME", "Erro no canal: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Chamado pela Activity no onResume para garantir que mensagens perdidas
+     * enquanto o app estava em background sejam carregadas e o canal realtime
+     * seja reestabelecido se necessário.
+     */
+    fun refreshOnResume() {
+        val chatroomId = _chatroom.value?.id ?: return
+        viewModelScope.launch {
+            try {
+                // Recarrega mensagens para pegar as que chegaram em background
+                loadMessages(chatroomId)
+                // Reinscreve no canal realtime se ele não estiver ativo
+                val channel = realtimeChannel
+                if (channel == null) {
+                    subscribeToRealtime(chatroomId)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("REALTIME", "Erro ao reconectar: ${e.message}")
             }
         }
     }

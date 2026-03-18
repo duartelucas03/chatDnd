@@ -9,7 +9,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -18,6 +17,7 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
 import com.example.easychat.databinding.FragmentProfileBinding
 import com.example.easychat.ui.auth.SplashActivity
+import com.example.easychat.ui.main.MainActivity
 import com.example.easychat.utils.AndroidUtil
 import com.github.dhaval2404.imagepicker.ImagePicker
 import com.google.firebase.messaging.FirebaseMessaging
@@ -30,20 +30,8 @@ class ProfileFragment : Fragment() {
     private var selectedImageUri: Uri? = null
     private val viewModel: ProfileViewModel by viewModels()
 
-    private val imagePickLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.data?.let { uri ->
-                selectedImageUri = uri
-                Glide.with(this).load(uri)
-                    .apply(RequestOptions.circleCropTransform()
-                        .skipMemoryCache(true)
-                        .diskCacheStrategy(DiskCacheStrategy.NONE))
-                    .into(binding.profileImageView)
-            }
-        }
-    }
+    // SEM imagePickLauncher aqui — o launcher fica na MainActivity para evitar
+    // IllegalStateException quando o ImagePicker exibe seu diálogo intermediário.
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -65,17 +53,25 @@ class ProfileFragment : Fragment() {
                 binding.profileUsername.error = "Username deve ter ao menos 3 caracteres"
                 return@setOnClickListener
             }
+            val currentUser = viewModel.user.value
+            if (currentUser == null) {
+                AndroidUtil.showToast(requireContext(), "Aguarde carregar o perfil")
+                return@setOnClickListener
+            }
+            if (selectedImageUri == null && newUsername == currentUser.username) {
+                AndroidUtil.showToast(requireContext(), "Nenhuma alteração detectada")
+                return@setOnClickListener
+            }
             viewModel.updateProfile(newUsername, selectedImageUri, requireContext().contentResolver)
             selectedImageUri = null
         }
 
-        // A View delega o logout ao ViewModel; só trata a navegação após o evento
         binding.logoutBtn.setOnClickListener {
-            // FirebaseMessaging.deleteToken() precisa do contexto Android — fica na View,
-            // mas o ViewModel decide quando e como encerrar a sessão
+            binding.logoutBtn.isEnabled = false
             viewModel.logout { onTokenDeleted ->
                 FirebaseMessaging.getInstance().deleteToken()
                     .addOnCompleteListener { onTokenDeleted() }
+                    .addOnFailureListener { onTokenDeleted() }
             }
         }
 
@@ -90,8 +86,22 @@ class ProfileFragment : Fragment() {
                 requestPermissions(arrayOf(permission), 100)
                 return@setOnClickListener
             }
+
+            // Usa o launcher da MainActivity — registrado antes de qualquer diálogo intermediário
+            val mainActivity = activity as? MainActivity ?: return@setOnClickListener
             ImagePicker.with(this).cropSquare().compress(512).maxResultSize(512, 512)
-                .createIntent { intent -> imagePickLauncher.launch(intent) }
+                .createIntent { intent ->
+                    mainActivity.launchImagePicker(intent) { uri ->
+                        selectedImageUri = uri
+                        if (_binding != null) {
+                            Glide.with(this).load(uri)
+                                .apply(RequestOptions.circleCropTransform()
+                                    .skipMemoryCache(true)
+                                    .diskCacheStrategy(DiskCacheStrategy.NONE))
+                                .into(binding.profileImageView)
+                        }
+                    }
+                }
         }
     }
 
@@ -120,13 +130,12 @@ class ProfileFragment : Fragment() {
             viewModel.clearUpdateResult()
         }
 
-        // A navegação pós-logout é responsabilidade da View, mas o gatilho vem do ViewModel
-        viewModel.logoutComplete.observe(viewLifecycleOwner) { done ->
-            if (!done) return@observe
+        // logoutEvent é um SingleLiveEvent — dispara apenas uma vez, nunca no observe inicial
+        viewModel.logoutEvent.observe(viewLifecycleOwner) {
+            binding.logoutBtn.isEnabled = true
             startActivity(Intent(requireContext(), SplashActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             })
-            viewModel.clearLogoutComplete()
         }
     }
 
@@ -135,3 +144,4 @@ class ProfileFragment : Fragment() {
         _binding = null
     }
 }
+
