@@ -20,20 +20,23 @@ import com.example.easychat.model.ChatMessageUiModel
 
 /**
  * Adapter 100% View: recebe [ChatMessageUiModel] já prontos do ViewModel.
- * Sem descriptografia, sem formatação de tempo, sem lógica de negócio.
+ * O keyword de highlight vem dentro do próprio UiModel — sem estado mutável
+ * no adapter, o DiffUtil detecta corretamente quando redesenhar cada item.
  */
 class ChatRecyclerAdapter(
     private val onLongClick: (ChatMessageUiModel) -> Unit
 ) : ListAdapter<ChatMessageUiModel, ChatRecyclerAdapter.ChatViewHolder>(DIFF) {
 
-    var highlightKeyword: String = ""
+    // FIX: removido o var highlightKeyword do adapter.
+    // O keyword agora vem em cada ChatMessageUiModel.highlightKeyword,
+    // garantindo que o DiffUtil force o redesenho quando ele muda.
 
     companion object {
         private val DIFF = object : DiffUtil.ItemCallback<ChatMessageUiModel>() {
             override fun areItemsTheSame(a: ChatMessageUiModel, b: ChatMessageUiModel) =
                 a.id == b.id || (a.localId != null && a.localId == b.localId)
             override fun areContentsTheSame(a: ChatMessageUiModel, b: ChatMessageUiModel) =
-                a == b
+                a == b  // inclui highlightKeyword — se mudou, redesenha
         }
     }
 
@@ -122,8 +125,8 @@ class ChatRecyclerAdapter(
                 }
                 else -> {
                     textView.visibility = View.VISIBLE
-                    // texto já descriptografado pelo ViewModel; só aplica highlight visual
-                    textView.text = applyHighlight(item.text ?: "", textView)
+                    // FIX: keyword vem do próprio item — sempre correto e sincronizado
+                    textView.text = applyHighlight(item.text ?: "", item.highlightKeyword, textView)
                 }
             }
 
@@ -138,18 +141,22 @@ class ChatRecyclerAdapter(
             }
         }
 
-        private fun applyHighlight(text: String, textView: TextView): SpannableString {
+        private fun applyHighlight(
+            text: String,
+            keyword: String,
+            textView: TextView
+        ): SpannableString {
             val spannable = SpannableString(text)
-            if (highlightKeyword.isNotBlank()) {
+            if (keyword.isNotBlank()) {
                 val lower   = text.lowercase()
-                val keyword = highlightKeyword.lowercase()
-                var start   = lower.indexOf(keyword)
+                val kw      = keyword.lowercase()
+                var start   = lower.indexOf(kw)
                 val color   = ContextCompat.getColor(textView.context, R.color.highlight_yellow)
                 while (start >= 0) {
-                    val end = start + keyword.length
+                    val end = start + kw.length
                     spannable.setSpan(BackgroundColorSpan(color), start, end, 0)
                     spannable.setSpan(StyleSpan(Typeface.BOLD), start, end, 0)
-                    start = lower.indexOf(keyword, end)
+                    start = lower.indexOf(kw, end)
                 }
             }
             return spannable

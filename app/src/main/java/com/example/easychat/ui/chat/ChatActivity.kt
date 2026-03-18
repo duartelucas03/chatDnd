@@ -92,7 +92,6 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        // Adapter recebe apenas o callback de long-click — sem currentUserId (ViewModel já resolve)
         adapter = ChatRecyclerAdapter(onLongClick = { uiModel -> showPinDialog(uiModel) })
         binding.chatRecyclerView.layoutManager = LinearLayoutManager(this).apply {
             reverseLayout = true
@@ -133,9 +132,9 @@ class ChatActivity : AppCompatActivity() {
             if (binding.searchMessagesLayout.visibility == View.VISIBLE) {
                 binding.searchMessagesLayout.visibility = View.GONE
                 binding.searchMessagesInput.setText("")
+                // FIX: só chama filterMessages — o keyword é propagado pelo ViewModel
+                // para cada UiModel, sem precisar tocar no adapter diretamente
                 viewModel.filterMessages("")
-                adapter.highlightKeyword = ""
-                adapter.notifyDataSetChanged()
             } else {
                 binding.searchMessagesLayout.visibility = View.VISIBLE
                 binding.searchMessagesInput.requestFocus()
@@ -145,9 +144,7 @@ class ChatActivity : AppCompatActivity() {
         binding.searchMessagesInput.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val keyword = s.toString()
-                adapter.highlightKeyword = keyword
-                viewModel.filterMessages(keyword)
+                viewModel.filterMessages(s.toString())
             }
             override fun afterTextChanged(s: android.text.Editable?) {}
         })
@@ -166,7 +163,6 @@ class ChatActivity : AppCompatActivity() {
         viewModel.pinnedMessage.observe(this) { pinned ->
             if (pinned != null) {
                 binding.pinnedMessageLayout.visibility = View.VISIBLE
-                // texto já descriptografado pelo ViewModel
                 val displayText = when (pinned.type) {
                     "image"    -> "📷 Foto"
                     "audio"    -> "🎵 Áudio"
@@ -199,7 +195,8 @@ class ChatActivity : AppCompatActivity() {
         val action = if (uiModel.isPinned) "Desafixar mensagem" else "Fixar mensagem"
         AlertDialog.Builder(this)
             .setTitle(action)
-            .setMessage(if (uiModel.isPinned) "Deseja desafixar esta mensagem?" else "Deseja fixar esta mensagem no topo do chat?")
+            .setMessage(if (uiModel.isPinned) "Deseja desafixar esta mensagem?"
+                        else "Deseja fixar esta mensagem no topo do chat?")
             .setPositiveButton("Confirmar") { _, _ -> viewModel.togglePin(uiModel) }
             .setNegativeButton("Cancelar", null)
             .show()

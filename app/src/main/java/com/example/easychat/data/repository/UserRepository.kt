@@ -32,14 +32,14 @@ class UserRepository {
         }
     }
 
-    suspend fun searchUsers(term: String): List<UserModel> = try {
-        db.from("users").select {
-            filter {
-                gte("username", term)
-                lte("username", "$term\uF8FF")
-            }
-        }.decodeList()
-    } catch (e: Exception) { emptyList() }
+    suspend fun searchUsers(term: String): List<UserModel> {
+        if (term.isBlank()) return emptyList()
+        return try {
+            db.from("users").select {
+                filter { ilike("username", "%$term%") }
+            }.decodeList()
+        } catch (e: Exception) { emptyList() }
+    }
 
     suspend fun getUserById(userId: String): UserModel? = try {
         db.from("users").select {
@@ -47,10 +47,12 @@ class UserRepository {
         }.decodeSingleOrNull()
     } catch (e: Exception) { null }
 
-    suspend fun getUsersByIds(userIds: List<String>): List<UserModel> = try {
+    suspend fun getUsersByIds(userIds: List<String>): List<UserModel> {
         if (userIds.isEmpty()) return emptyList()
-        db.from("users").select {
-            filter { isIn("id", userIds) }
-        }.decodeList()
-    } catch (e: Exception) { emptyList() }
+        return try {
+            db.from("users").select {
+                filter { isIn("id", userIds) }
+            }.decodeList()
+        } catch (e: Exception) { emptyList() }
+    }
 }

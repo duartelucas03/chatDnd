@@ -32,14 +32,11 @@ class ChatViewModel(
     private val _chatroom = MutableLiveData<ChatroomModel?>()
     val chatroom: LiveData<ChatroomModel?> = _chatroom
 
-    // Lista completa de modelos de domínio (fonte da verdade interna)
     private val _allMessages = mutableListOf<ChatMessageModel>()
 
-    // O que a View observa: UiModels já prontos para exibição
     private val _messages = MutableLiveData<List<ChatMessageUiModel>>(emptyList())
     val messages: LiveData<List<ChatMessageUiModel>> = _messages
 
-    // Mensagem fixada já descriptografada para exibição
     private val _pinnedMessageUi = MutableLiveData<ChatMessageUiModel?>()
     val pinnedMessage: LiveData<ChatMessageUiModel?> = _pinnedMessageUi
 
@@ -111,13 +108,13 @@ class ChatViewModel(
     }
 
     /**
-     * Converte a lista interna de domínio para UiModels,
-     * aplicando filtro, descriptografia e formatação — tudo no ViewModel.
+     * Converte domínio → UiModels aplicando filtro, descriptografia, formatação
+     * e — FIX — inclui o keyword atual em cada UiModel para que o DiffUtil
+     * detecte a mudança de keyword e force o redesenho do highlight.
      */
     private fun publishMessages() {
         val filtered = if (currentFilter.isBlank()) _allMessages.toList()
         else _allMessages.filter {
-            // Filtra pelo texto descriptografado
             CryptoManager.decrypt(it.content ?: "").contains(currentFilter, ignoreCase = true)
         }
         _messages.postValue(filtered.map { toUiModel(it) })
@@ -129,19 +126,22 @@ class ChatViewModel(
             CryptoManager.decrypt(msg.content ?: "") else null
 
         return ChatMessageUiModel(
-            id             = msg.id,
-            localId        = msg.localId,
-            isFromMe       = isMe,
-            type           = msg.type ?: "text",
-            text           = decryptedText,
-            mediaUrl       = msg.mediaUrl,
-            locationLat    = msg.locationLat,
-            locationLng    = msg.locationLng,
-            timeFormatted  = formatTime(msg.createdAt),
-            statusSymbol   = when (msg.status) { "read", "delivered" -> "✓✓"; else -> "✓" },
-            showStatus     = isMe,
-            isPinned       = msg.isPinned,
-            source         = msg
+            id               = msg.id,
+            localId          = msg.localId,
+            isFromMe         = isMe,
+            type             = msg.type ?: "text",
+            text             = decryptedText,
+            mediaUrl         = msg.mediaUrl,
+            locationLat      = msg.locationLat,
+            locationLng      = msg.locationLng,
+            timeFormatted    = formatTime(msg.createdAt),
+            statusSymbol     = when (msg.status) { "read", "delivered" -> "✓✓"; else -> "✓" },
+            showStatus       = isMe,
+            isPinned         = msg.isPinned,
+            // FIX: keyword incluída no UiModel — quando muda, areContentsTheSame
+            // retorna false e o DiffUtil força onBindViewHolder para todos os itens
+            highlightKeyword = currentFilter,
+            source           = msg
         )
     }
 
@@ -249,7 +249,7 @@ class ChatViewModel(
 
     fun markAsRead(messageId: String) {
         viewModelScope.launch {
-            try { chatRepository.markMessageAsRead(messageId) } catch (e: Exception) { /* silencioso */ }
+            try { chatRepository.markMessageAsRead(messageId) } catch (e: Exception) { }
         }
     }
 
