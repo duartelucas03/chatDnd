@@ -23,6 +23,12 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        createNotificationChannel()
+
+        binding.mainSearchBtn.setOnClickListener {
+            startActivity(Intent(this, SearchUserActivity::class.java))
+        }
+
         binding.mainSearchBtn.setOnClickListener {
             startActivity(Intent(this, SearchUserActivity::class.java))
         }
@@ -61,5 +67,16 @@ class MainActivity : AppCompatActivity() {
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
             viewModel.updateFcmToken(token)
         }
+    }
+    private fun createNotificationChannel() {
+        val channel = android.app.NotificationChannel(
+            "easychat_channel",
+            "Mensagens",
+            android.app.NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Notificações de novas mensagens"
+        }
+        val manager = getSystemService(android.app.NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
     }
 }
