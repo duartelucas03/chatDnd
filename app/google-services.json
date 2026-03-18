@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "561043901242",
+    "project_id": "chatapp-a0709",
+    "storage_bucket": "chatapp-a0709.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:561043901242:android:eed6a2a73cf3cd3402de03",
+        "android_client_info": {
+          "package_name": "com.example.easychat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmrkN1ZZi2nkx9WBYvU7OO57Ke6G9bSVI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
