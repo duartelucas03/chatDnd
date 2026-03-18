@@ -26,6 +26,8 @@ import com.github.dhaval2404.imagepicker.ImagePicker
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import java.io.File
+import androidx.core.app.ActivityCompat
+
 
 class ChatActivity : AppCompatActivity() {
 
@@ -117,6 +119,27 @@ class ChatActivity : AppCompatActivity() {
 
         // Req. 7 + Req. 15 — Câmera / galeria
         binding.attachImageBtn.setOnClickListener {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
+                    != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(Manifest.permission.READ_MEDIA_IMAGES),
+                        100
+                    )
+                    return@setOnClickListener
+                }
+            } else {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
+                        100
+                    )
+                    return@setOnClickListener
+                }
+            }
             ImagePicker.with(this)
                 .cropSquare()
                 .compress(1024)
