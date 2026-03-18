@@ -22,6 +22,15 @@ object AndroidUtil {
     fun getUserModelFromIntent(intent: Intent): UserModel =
         intent.getParcelableExtra("user_model") ?: UserModel()
 
+    fun passChatroomIdAsIntent(intent: Intent, chatroomId: String, displayName: String, avatarUrl: String?) {
+        intent.putExtra("chatroom_id", chatroomId)
+        intent.putExtra("chatroom_display_name", displayName)
+        intent.putExtra("chatroom_avatar_url", avatarUrl ?: "")
+    }
+
+    fun getChatroomIdFromIntent(intent: Intent): String? =
+        intent.getStringExtra("chatroom_id")
+
     fun setProfilePic(context: Context, imageUri: Uri, imageView: ImageView) {
         Glide.with(context).load(imageUri)
             .apply(RequestOptions.circleCropTransform()).into(imageView)

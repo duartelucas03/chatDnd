@@ -151,6 +151,23 @@ class ChatRepository {
         }.decodeSingleOrNull()
     } catch (e: Exception) { null }
 
+    suspend fun addMemberToChatroom(chatroomId: String, userId: String) {
+        db.from("chatroom_members").insert(buildJsonObject {
+            put("chatroom_id", chatroomId)
+            put("user_id", userId)
+            put("role", "member")
+        })
+    }
+
+    suspend fun removeMemberFromChatroom(chatroomId: String, userId: String) {
+        db.from("chatroom_members").delete {
+            filter {
+                eq("chatroom_id", chatroomId)
+                eq("user_id", userId)
+            }
+        }
+    }
+
     fun filterMessages(messages: List<ChatMessageModel>, keyword: String): List<ChatMessageModel> {
         if (keyword.isBlank()) return messages
         return messages.filter { it.content?.contains(keyword, ignoreCase = true) == true }

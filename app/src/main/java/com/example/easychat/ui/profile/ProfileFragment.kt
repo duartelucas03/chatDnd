@@ -94,7 +94,7 @@ class ProfileFragment : Fragment() {
 
             // Usa o launcher da MainActivity — registrado antes de qualquer diálogo intermediário
             val mainActivity = activity as? MainActivity ?: return@setOnClickListener
-            ImagePicker.with(this).cropSquare().compress(512).maxResultSize(512, 512)
+            ImagePicker.with(requireActivity()).cropSquare().compress(512).maxResultSize(512, 512)
                 .createIntent { intent ->
                     mainActivity.launchImagePicker(intent) { uri ->
                         selectedImageUri = uri

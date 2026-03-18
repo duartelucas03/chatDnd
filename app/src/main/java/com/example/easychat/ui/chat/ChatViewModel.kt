@@ -27,10 +27,12 @@ import java.time.ZoneId
 
 class ChatViewModel(
     val otherUser: UserModel,
+    context: android.content.Context,
     private val chatRepository: ChatRepository = ChatRepository(),
-    private val mediaRepository: MediaRepository = MediaRepository(),
-    private var localRepo: LocalMessageRepository? = null
+    private val mediaRepository: MediaRepository = MediaRepository()
 ) : ViewModel() {
+
+    private val localRepo: LocalMessageRepository = LocalMessageRepository(context)
 
     private val _chatroom = MutableLiveData<ChatroomModel?>()
     val chatroom: LiveData<ChatroomModel?> = _chatroom
@@ -61,13 +63,13 @@ class ChatViewModel(
     private var currentFilter: String = ""
     private val currentUserId = SupabaseClientProvider.currentUserId()
 
-    fun initLocalRepo(context: Context) {
-        if (localRepo == null) localRepo = LocalMessageRepository(context)
-    }
-
     init {
-        loadOrCreateChatroom()
-        subscribeToUserStatus()
+        // Se otherUser.id está vazio, foi aberto como grupo via chatroomId —
+        // setExistingChatroom() será chamado pela Activity logo após
+        if (otherUser.id.isNotEmpty()) {
+            loadOrCreateChatroom()
+            subscribeToUserStatus()
+        }
     }
 
     private fun loadOrCreateChatroom() {
@@ -85,13 +87,12 @@ class ChatViewModel(
     }
 
     private suspend fun loadMessages(chatroomId: String) {
-        // 1. Exibe cache local imediatamente (boa UX offline)
-        localRepo?.getMessages(chatroomId)?.let { cached ->
-            if (cached.isNotEmpty()) {
-                _allMessages.clear()
-                _allMessages.addAll(cached)
-                publishMessages()
-            }
+        // 1. Exibe cache local imediatamente — boa UX offline e evita tela em branco
+        val cached = localRepo.getMessages(chatroomId)
+        if (cached.isNotEmpty()) {
+            _allMessages.clear()
+            _allMessages.addAll(cached)
+            publishMessages()
         }
         // 2. Busca remoto e atualiza
         try {
@@ -99,10 +100,8 @@ class ChatViewModel(
             _allMessages.clear()
             _allMessages.addAll(remote)
             publishMessages()
-            localRepo?.saveMessages(remote)
-            markAllUnreadAsRead(chatroomId)
+            localRepo.saveMessages(remote)
         } catch (e: Exception) {
-            // Se falhou (offline), mantém cache local já exibido
             android.util.Log.w("OFFLINE", "Sem conexão, usando cache: ${e.message}")
         }
     }
@@ -135,7 +134,7 @@ class ChatViewModel(
                         _allMessages.none { it.id == newMsg.id }) {
                         _allMessages.add(0, newMsg)
                         publishMessages()
-                        localRepo?.saveMessage(newMsg)
+                        localRepo.saveMessage(newMsg)
                         if (newMsg.senderId != currentUserId) markAsRead(newMsg.id)
                     }
                 }.launchIn(viewModelScope)
@@ -149,11 +148,17 @@ class ChatViewModel(
                     if (idx >= 0) {
                         _allMessages[idx] = updated
                         publishMessages()
-                        localRepo?.updateStatus(updated.id, updated.status)
+                        localRepo.updateStatus(updated.id, updated.status)
                     }
                 }.launchIn(viewModelScope)
 
                 channel.subscribe()
+
+                // Recarrega mensagens APÓS o canal estar inscrito para garantir que
+                // nenhuma mensagem chegada durante a conexão do WebSocket seja perdida
+                loadMessages(chatroomId)
+                markAllUnreadAsRead(chatroomId)
+
             } catch (e: Exception) {
                 android.util.Log.e("REALTIME", "Erro no canal: ${e.message}")
             }
@@ -223,14 +228,13 @@ class ChatViewModel(
                 unread.forEach { msg ->
                     val idx = _allMessages.indexOfFirst { it.id == msg.id }
                     if (idx >= 0) _allMessages[idx] = msg.copy(status = "read")
-                    localRepo?.updateStatus(msg.id, "read")
+                    localRepo.updateStatus(msg.id, "read")
                 }
                 if (unread.isNotEmpty()) publishMessages()
             } catch (e: Exception) { /* ignora offline */ }
         }
     }
 
-    /** Escuta mudanças de status/last_seen do outro usuário em tempo real */
     /** Escuta mudanças de status/last_seen do outro usuário em tempo real */
     private fun subscribeToUserStatus() {
         viewModelScope.launch {
@@ -358,8 +362,68 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 chatRepository.markMessageAsRead(messageId)
-                localRepo?.updateStatus(messageId, "read")
+                localRepo.updateStatus(messageId, "read")
             } catch (e: Exception) { }
+        }
+    }
+
+    private val _groupMembers = MutableLiveData<List<com.example.easychat.model.UserModel>>(emptyList())
+    val groupMembers: LiveData<List<com.example.easychat.model.UserModel>> = _groupMembers
+
+    fun loadGroupMembers() {
+        val chatroomId = _chatroom.value?.id ?: return
+        viewModelScope.launch {
+            try {
+                val memberIds = chatRepository.getMembersOfChatroom(chatroomId).map { it.userId }
+                val users = com.example.easychat.data.repository.UserRepository()
+                    .getUsersByIds(memberIds)
+                _groupMembers.postValue(users)
+            } catch (e: Exception) { _error.postValue("Erro ao carregar membros: ${e.message}") }
+        }
+    }
+
+    fun addMemberByUsername(username: String, chatroomId: String) {
+        viewModelScope.launch {
+            try {
+                val users = com.example.easychat.data.repository.UserRepository().searchUsers(username)
+                val user = users.firstOrNull { it.username.equals(username, ignoreCase = true) }
+                if (user == null) {
+                    _error.postValue("Usuário \"$username\" não encontrado")
+                    return@launch
+                }
+                chatRepository.addMemberToChatroom(chatroomId, user.id)
+                loadGroupMembers()
+            } catch (e: Exception) {
+                _error.postValue("Erro ao adicionar membro: ${e.message}")
+            }
+        }
+    }
+
+    fun removeGroupMember(userId: String) {
+        val chatroomId = _chatroom.value?.id ?: return
+        viewModelScope.launch {
+            try {
+                chatRepository.removeMemberFromChatroom(chatroomId, userId)
+                loadGroupMembers()
+            } catch (e: Exception) { _error.postValue("Erro ao remover membro: ${e.message}") }
+        }
+    }
+
+    /**
+     * Usado quando a Activity já tem o chatroomId (grupos abertos da lista de recentes).
+     * Cancela o loadOrCreateChatroom e carrega diretamente pelo id.
+     */
+    fun setExistingChatroom(chatroomId: String) {
+        viewModelScope.launch {
+            try {
+                val room = chatRepository.getChatroomById(chatroomId) ?: return@launch
+                _chatroom.postValue(room)
+                loadMessages(chatroomId)
+                loadPinnedMessage(chatroomId)
+                subscribeToRealtime(chatroomId)
+            } catch (e: Exception) {
+                _error.postValue("Erro ao carregar grupo: ${e.message}")
+            }
         }
     }
 

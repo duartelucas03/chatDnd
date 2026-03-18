@@ -57,7 +57,7 @@ class SearchUserActivity : AppCompatActivity() {
                 binding.seachUsernameInput.error = "Digite ao menos 3 caracteres"
                 return@setOnClickListener
             }
-            adapter.selectionMode = false
+            // NÃO reseta selectionMode — preserva seleções feitas antes da nova busca
             viewModel.searchUsers(term)
         }
 
@@ -158,6 +158,11 @@ class SearchUserActivity : AppCompatActivity() {
     private fun observeViewModel() {
         viewModel.results.observe(this) { users ->
             adapter.submitList(users)
+            // Se estava em modo seleção, mantém o banner visível e atualiza contagem
+            if (adapter.selectionMode) {
+                binding.groupSelectionBanner.visibility = View.VISIBLE
+                updateGroupSelectionBanner(adapter.getSelectedUsers())
+            }
         }
 
         viewModel.loading.observe(this) { isLoading ->
@@ -171,6 +176,12 @@ class SearchUserActivity : AppCompatActivity() {
             adapter.selectionMode = false
             binding.groupSelectionBanner.visibility = View.GONE
             viewModel.clearGroupCreated()
+            // Abre o grupo criado diretamente no ChatActivity
+            val intent = android.content.Intent(this, com.example.easychat.ui.chat.ChatActivity::class.java).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            com.example.easychat.utils.AndroidUtil.passChatroomIdAsIntent(intent, room.id, room.name ?: "Grupo", room.avatarUrl)
+            startActivity(intent)
             finish()
         }
 

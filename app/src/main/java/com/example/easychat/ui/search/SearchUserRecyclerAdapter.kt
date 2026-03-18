@@ -27,14 +27,16 @@ class SearchUserRecyclerAdapter(
     var selectionMode = false
         set(value) {
             field = value
+            // NÃO limpa selectedUsers ao entrar em modo seleção —
+            // só limpa ao sair do modo (value = false)
             if (!value) selectedUsers.clear()
             notifyDataSetChanged()
         }
 
-    private val selectedUsers = mutableSetOf<String>()
+    // Usa Map id→UserModel para preservar seleções entre buscas
+    private val selectedUsers = mutableMapOf<String, UserModel>()
 
-    fun getSelectedUsers(): List<UserModel> =
-        currentList.filter { selectedUsers.contains(it.id) }
+    fun getSelectedUsers(): List<UserModel> = selectedUsers.values.toList()
 
     companion object {
         private val DIFF = object : DiffUtil.ItemCallback<UserModel>() {
@@ -71,16 +73,18 @@ class SearchUserRecyclerAdapter(
                     .into(profilePic)
             }
 
-            // Modo seleção (criar grupo)
             if (selectionMode && !isSelf) {
                 checkBox?.visibility = View.VISIBLE
-                checkBox?.isChecked = selectedUsers.contains(user.id)
+                checkBox?.isChecked = selectedUsers.containsKey(user.id)
                 itemView.alpha = 1f
 
                 val toggle = {
-                    if (selectedUsers.contains(user.id)) selectedUsers.remove(user.id)
-                    else selectedUsers.add(user.id)
-                    checkBox?.isChecked = selectedUsers.contains(user.id)
+                    if (selectedUsers.containsKey(user.id)) {
+                        selectedUsers.remove(user.id)
+                    } else {
+                        selectedUsers[user.id] = user
+                    }
+                    checkBox?.isChecked = selectedUsers.containsKey(user.id)
                     onSelectionChanged?.invoke(getSelectedUsers())
                 }
                 itemView.setOnClickListener { toggle() }
@@ -88,7 +92,6 @@ class SearchUserRecyclerAdapter(
             } else {
                 checkBox?.visibility = View.GONE
                 itemView.alpha = if (isSelf && selectionMode) 0.4f else 1f
-
                 itemView.setOnClickListener {
                     if (isSelf) return@setOnClickListener
                     val intent = Intent(context, ChatActivity::class.java).apply {

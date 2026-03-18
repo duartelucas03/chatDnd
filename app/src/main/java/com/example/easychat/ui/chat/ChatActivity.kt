@@ -68,7 +68,19 @@ class ChatActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        otherUser = AndroidUtil.getUserModelFromIntent(intent)
+
+        // Suporta abertura por UserModel (chat direto) ou por chatroomId (grupo)
+        val chatroomId = AndroidUtil.getChatroomIdFromIntent(intent)
+        otherUser = if (chatroomId != null) {
+            // Grupo: cria um UserModel sintético só para o toolbar
+            UserModel(
+                id       = "",
+                username = intent.getStringExtra("chatroom_display_name") ?: "Grupo",
+                avatarUrl = intent.getStringExtra("chatroom_avatar_url")?.takeIf { it.isNotBlank() }
+            )
+        } else {
+            AndroidUtil.getUserModelFromIntent(intent)
+        }
 
         binding = ActivityChatBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -79,6 +91,11 @@ class ChatActivity : AppCompatActivity() {
         setupRecyclerView()
         setupInputBar()
         observeViewModel()
+
+        // Se veio com chatroomId direto (grupo), injeta no ViewModel
+        if (chatroomId != null) {
+            viewModel.setExistingChatroom(chatroomId)
+        }
     }
 
     private fun setupToolbar() {
@@ -90,18 +107,111 @@ class ChatActivity : AppCompatActivity() {
                 .into(binding.profilePicImageView)
         }
         updateUserStatusUi(otherUser)
+
+        // Mostra botão de gerenciar grupo apenas para grupos
+        val isGroup = AndroidUtil.getChatroomIdFromIntent(intent) != null
+        if (isGroup) {
+            binding.manageGroupBtn.visibility = View.VISIBLE
+            binding.manageGroupBtn.setOnClickListener {
+                viewModel.loadGroupMembers()
+                showGroupMembersDialog()
+            }
+            // Esconde status (não faz sentido para grupos)
+            binding.otherUserStatus.visibility = View.GONE
+        }
+    }
+
+    private fun showGroupMembersDialog() {
+        // Remove observer anterior para evitar múltiplos dialogs ao clicar várias vezes
+        viewModel.groupMembers.removeObservers(this)
+        viewModel.groupMembers.observe(this) { members ->
+            if (members.isEmpty()) return@observe
+            // Remove imediatamente após receber — evita re-disparar na próxima mudança
+            viewModel.groupMembers.removeObservers(this)
+
+            val currentUserId = com.example.easychat.utils.SupabaseClientProvider.currentUserId()
+            val chatroomId = AndroidUtil.getChatroomIdFromIntent(intent) ?: return@observe
+
+            // Monta opções: participantes + separador + ações
+            val items = mutableListOf<String>()
+            items.addAll(members.map { m ->
+                if (m.id == currentUserId) "✓ ${m.username} (Você)" else m.username
+            })
+            items.add("── ──────────────────")
+            items.add("➕ Adicionar participante")
+            items.add("🚪 Sair do grupo")
+
+            AlertDialog.Builder(this)
+                .setTitle("Grupo · ${members.size} participante(s)")
+                .setItems(items.toTypedArray()) { _, idx ->
+                    when {
+                        idx < members.size -> {
+                            // Clicou num membro
+                            val member = members[idx]
+                            if (member.id == currentUserId) return@setItems
+                            AlertDialog.Builder(this)
+                                .setTitle("Remover ${member.username}?")
+                                .setPositiveButton("Remover") { _, _ ->
+                                    viewModel.removeGroupMember(member.id)
+                                }
+                                .setNegativeButton("Cancelar", null)
+                                .show()
+                        }
+                        items[idx].contains("Adicionar") -> {
+                            showAddMemberDialog(chatroomId)
+                        }
+                        items[idx].contains("Sair") -> {
+                            AlertDialog.Builder(this)
+                                .setTitle("Sair do grupo?")
+                                .setMessage("Você não poderá mais ver as mensagens deste grupo.")
+                                .setPositiveButton("Sair") { _, _ ->
+                                    viewModel.removeGroupMember(currentUserId)
+                                    finish()
+                                }
+                                .setNegativeButton("Cancelar", null)
+                                .show()
+                        }
+                    }
+                }
+                .setNegativeButton("Fechar", null)
+                .show()
+        }
+    }
+
+    private fun showAddMemberDialog(chatroomId: String) {
+        val input = android.widget.EditText(this).apply {
+            hint = "Username do novo participante"
+            setPadding(48, 24, 48, 24)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Adicionar participante")
+            .setView(input)
+            .setPositiveButton("Buscar e Adicionar") { _, _ ->
+                val username = input.text.toString().trim()
+                if (username.length < 3) {
+                    Toast.makeText(this, "Digite ao menos 3 caracteres", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                viewModel.addMemberByUsername(username, chatroomId)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun updateUserStatusUi(user: UserModel) {
-        val statusText = when {
-            user.statusMessage.isNotBlank() -> user.statusMessage
-            user.status == "online" -> "Online"
-            user.status == "busy"   -> "Ocupado"
-            else -> {
-                if (user.lastSeen.isNotBlank()) "Visto por último: ${formatLastSeen(user.lastSeen)}"
-                else "Offline"
-            }
+        // Linha principal: online/offline/last seen
+        val connectionText = when (user.status) {
+            "online" -> "Online"
+            "busy"   -> "Ocupado"
+            else -> if (user.lastSeen.isNotBlank())
+                "Visto por último: ${formatLastSeen(user.lastSeen)}"
+            else "Offline"
         }
+        // Se tiver status message, adiciona na mesma linha separado por " · "
+        val statusText = if (user.statusMessage.isNotBlank())
+            "$connectionText · ${user.statusMessage}"
+        else connectionText
+
         binding.otherUserStatus.text = statusText
         binding.otherUserStatus.visibility = android.view.View.VISIBLE
     }

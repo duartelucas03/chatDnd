@@ -63,12 +63,15 @@ class RecentChatRecyclerAdapter(
             }
 
             itemView.setOnClickListener {
+                val intent = Intent(context, ChatActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
                 when {
-                    item.isGroup -> { /* TODO: abrir GroupChatActivity */ }
+                    item.isGroup -> {
+                        AndroidUtil.passChatroomIdAsIntent(intent, item.chatroomId, item.displayName, item.avatarUrl)
+                        context.startActivity(intent)
+                    }
                     item.otherUser != null -> {
-                        val intent = Intent(context, ChatActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
                         AndroidUtil.passUserModelAsIntent(intent, item.otherUser)
                         context.startActivity(intent)
                     }

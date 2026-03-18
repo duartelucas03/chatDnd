@@ -88,12 +88,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        viewModel.setUserOnline()
+        // online/offline gerenciado pelo EasyChatApplication via ProcessLifecycleOwner
     }
 
-    override fun onPause() {
-        super.onPause()
-        viewModel.setUserOffline()
+    override fun onStop() {
+        super.onStop()
+        // online/offline gerenciado pelo EasyChatApplication via ProcessLifecycleOwner
     }
 
     /**
