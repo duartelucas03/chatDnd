@@ -33,12 +33,54 @@
             android:layout_centerVertical="true"
             android:id="@+id/back_btn"/>
 
+        <ImageButton
+            android:id="@+id/create_group_btn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_group"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:tint="@color/white"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="4dp" />
+
     </RelativeLayout>
+
+    <!-- Banner de seleção para grupo (oculto por padrão) -->
+    <LinearLayout
+        android:id="@+id/group_selection_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/toolbar"
+        android:background="#E3F2FD"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/group_selected_count"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="0 selecionados"
+            android:textColor="@color/my_primary"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/confirm_group_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Criar Grupo"
+            android:textSize="12sp"
+            android:backgroundTint="@color/my_primary" />
+
+    </LinearLayout>
 
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/toolbar"
+        android:layout_below="@id/group_selection_banner"
         android:layout_margin="10dp"
         android:id="@+id/search_user_layout">
 

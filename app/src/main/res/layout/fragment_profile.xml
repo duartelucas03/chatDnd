@@ -42,6 +42,18 @@
         android:id="@+id/profile_phone"
         />
 
+    <EditText
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="10dp"
+        android:hint="Status (ex: Disponível, Ocupado...)"
+        android:inputType="text"
+        android:layout_margin="10dp"
+        android:background="@drawable/edit_text_rounded_corner"
+        android:elevation="5dp"
+        android:id="@+id/profile_status_message"
+        />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="100dp"

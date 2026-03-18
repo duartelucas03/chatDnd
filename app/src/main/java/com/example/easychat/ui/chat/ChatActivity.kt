@@ -89,7 +89,32 @@ class ChatActivity : AppCompatActivity() {
                 .apply(RequestOptions.circleCropTransform())
                 .into(binding.profilePicImageView)
         }
+        updateUserStatusUi(otherUser)
     }
+
+    private fun updateUserStatusUi(user: UserModel) {
+        val statusText = when {
+            user.statusMessage.isNotBlank() -> user.statusMessage
+            user.status == "online" -> "Online"
+            user.status == "busy"   -> "Ocupado"
+            else -> {
+                if (user.lastSeen.isNotBlank()) "Visto por último: ${formatLastSeen(user.lastSeen)}"
+                else "Offline"
+            }
+        }
+        binding.otherUserStatus.text = statusText
+        binding.otherUserStatus.visibility = android.view.View.VISIBLE
+    }
+
+    private fun formatLastSeen(lastSeen: String): String = try {
+        val instant = java.time.Instant.parse(lastSeen)
+        val local = instant.atZone(java.time.ZoneId.systemDefault())
+        val now = java.time.LocalDateTime.now(java.time.ZoneId.systemDefault())
+        if (local.toLocalDate() == now.toLocalDate())
+            String.format("hoje às %02d:%02d", local.hour, local.minute)
+        else
+            String.format("%02d/%02d às %02d:%02d", local.dayOfMonth, local.monthValue, local.hour, local.minute)
+    } catch (e: Exception) { "offline" }
 
     private fun setupRecyclerView() {
         adapter = ChatRecyclerAdapter(onLongClick = { uiModel -> showPinDialog(uiModel) })
@@ -158,6 +183,11 @@ class ChatActivity : AppCompatActivity() {
         viewModel.messages.observe(this) { messages ->
             adapter.submitList(messages)
             if (messages.isNotEmpty()) binding.chatRecyclerView.scrollToPosition(0)
+        }
+
+        // Atualiza toolbar quando status/last_seen do outro usuário mudar
+        viewModel.otherUserLive.observe(this) { user ->
+            updateUserStatusUi(user)
         }
 
         viewModel.pinnedMessage.observe(this) { pinned ->

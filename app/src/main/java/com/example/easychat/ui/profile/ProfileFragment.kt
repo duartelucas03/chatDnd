@@ -58,20 +58,25 @@ class ProfileFragment : Fragment() {
                 AndroidUtil.showToast(requireContext(), "Aguarde carregar o perfil")
                 return@setOnClickListener
             }
-            if (selectedImageUri == null && newUsername == currentUser.username) {
+            val newStatus = binding.profileStatusMessage.text.toString().trim()
+            if (selectedImageUri == null && newUsername == currentUser.username
+                && newStatus == currentUser.statusMessage) {
                 AndroidUtil.showToast(requireContext(), "Nenhuma alteração detectada")
                 return@setOnClickListener
             }
-            viewModel.updateProfile(newUsername, selectedImageUri, requireContext().contentResolver)
+            viewModel.updateProfile(newUsername, newStatus, selectedImageUri, requireContext().contentResolver)
             selectedImageUri = null
         }
 
         binding.logoutBtn.setOnClickListener {
             binding.logoutBtn.isEnabled = false
-            viewModel.logout { onTokenDeleted ->
-                FirebaseMessaging.getInstance().deleteToken()
-                    .addOnCompleteListener { onTokenDeleted() }
-                    .addOnFailureListener { onTokenDeleted() }
+            // Deleta o token FCM em paralelo (best-effort) e faz logout
+            FirebaseMessaging.getInstance().deleteToken()
+            viewModel.logout {
+                // Chamado na main thread pelo ViewModel após signOut (com ou sem erro)
+                startActivity(Intent(requireContext(), SplashActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                })
             }
         }
 
@@ -115,6 +120,7 @@ class ProfileFragment : Fragment() {
             user ?: return@observe
             binding.profileUsername.setText(user.username)
             binding.profilePhone.setText(user.phone)
+            binding.profileStatusMessage.setText(user.statusMessage)
             if (!user.avatarUrl.isNullOrBlank()) {
                 Glide.with(this).load(user.avatarUrl)
                     .apply(RequestOptions.circleCropTransform()
@@ -128,14 +134,6 @@ class ProfileFragment : Fragment() {
             success ?: return@observe
             AndroidUtil.showToast(requireContext(), if (success) "Perfil atualizado!" else "Falha ao atualizar")
             viewModel.clearUpdateResult()
-        }
-
-        // logoutEvent é um SingleLiveEvent — dispara apenas uma vez, nunca no observe inicial
-        viewModel.logoutEvent.observe(viewLifecycleOwner) {
-            binding.logoutBtn.isEnabled = true
-            startActivity(Intent(requireContext(), SplashActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            })
         }
     }
 

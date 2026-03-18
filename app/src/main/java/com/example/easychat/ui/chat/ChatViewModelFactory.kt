@@ -12,7 +12,7 @@ class ChatViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ChatViewModel(otherUser) as T
+            return ChatViewModel(otherUser).apply { initLocalRepo(context) } as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

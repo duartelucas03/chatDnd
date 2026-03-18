@@ -135,7 +135,13 @@ class ChatRecyclerAdapter(
 
             if (item.showStatus) {
                 statusView.visibility = View.VISIBLE
-                statusView.text       = item.statusSymbol
+                statusView.text = item.statusSymbol
+                // Azul se lida, cinza se só enviada
+                val color = if (item.statusSymbol == "✓✓")
+                    ContextCompat.getColor(statusView.context, R.color.my_primary)
+                else
+                    ContextCompat.getColor(statusView.context, android.R.color.darker_gray)
+                statusView.setTextColor(color)
             } else {
                 statusView.visibility = View.GONE
             }

@@ -1,48 +1,19 @@
 package com.example.easychat.ui.profile
 
 import android.net.Uri
-import androidx.annotation.MainThread
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.easychat.data.repository.MediaRepository
 import com.example.easychat.data.repository.UserRepository
 import com.example.easychat.model.UserModel
 import com.example.easychat.utils.SupabaseClientProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicBoolean
-
-/**
- * LiveData que dispara o observer apenas UMA VEZ por setValue/postValue.
- * Resolve o problema clássico de navegação/logout onde o observer é
- * re-entregue após rotação de tela ou recriação do Fragment.
- */
-class SingleLiveEvent<T> : MutableLiveData<T>() {
-    private val pending = AtomicBoolean(false)
-
-    @MainThread
-    override fun observe(owner: LifecycleOwner, observer: Observer<in T>) {
-        super.observe(owner) { value ->
-            if (pending.compareAndSet(true, false)) {
-                observer.onChanged(value)
-            }
-        }
-    }
-
-    @MainThread
-    override fun setValue(value: T?) {
-        pending.set(true)
-        super.setValue(value)
-    }
-
-    override fun postValue(value: T?) {
-        pending.set(true)
-        super.postValue(value)
-    }
-}
+import kotlinx.coroutines.withContext
 
 class ProfileViewModel(
     private val userRepository: UserRepository = UserRepository(),
@@ -58,10 +29,6 @@ class ProfileViewModel(
     private val _loading = MutableLiveData<Boolean>(false)
     val loading: LiveData<Boolean> = _loading
 
-    // SingleLiveEvent: dispara apenas uma vez — nunca entrega "false" inicial ao observer
-    private val _logoutEvent = SingleLiveEvent<Unit>()
-    val logoutEvent: LiveData<Unit> = _logoutEvent
-
     private var pendingAvatarUrl: String? = null
 
     init { loadUser() }
@@ -76,6 +43,7 @@ class ProfileViewModel(
 
     fun updateProfile(
         newUsername: String,
+        newStatusMessage: String,
         imageUri: Uri?,
         contentResolver: android.content.ContentResolver
     ) {
@@ -94,7 +62,11 @@ class ProfileViewModel(
                         pendingAvatarUrl = avatarUrl
                     }
                 }
-                val updated = currentUser.copy(username = newUsername, avatarUrl = avatarUrl)
+                val updated = currentUser.copy(
+                    username      = newUsername,
+                    statusMessage = newStatusMessage,
+                    avatarUrl     = avatarUrl
+                )
                 userRepository.saveUser(updated)
                 _user.postValue(updated)
                 _updateResult.postValue(true)
@@ -106,17 +78,39 @@ class ProfileViewModel(
         }
     }
 
-    fun logout(onFcmTokenDeleted: (() -> Unit) -> Unit) {
-        onFcmTokenDeleted {
-            viewModelScope.launch {
+    /**
+     * Logout usa GlobalScope + NonCancellable intencionalmente:
+     * - GlobalScope: não é cancelado quando o ViewModel é destruído (o que pode
+     *   acontecer durante a navegação pós-logout, matando o viewModelScope)
+     * - NonCancellable: garante que o finally/onLogoutDone sempre execute,
+     *   mesmo que a coroutine sofra cancelamento externo
+     * - onLogoutDone é chamado na main thread sempre, com ou sem erro
+     */
+    @Suppress("OPT_IN_USAGE")
+    fun logout(onLogoutDone: () -> Unit) {
+        android.util.Log.d("LOGOUT", "1 - logout() chamado")
+        GlobalScope.launch(Dispatchers.IO) {
+            android.util.Log.d("LOGOUT", "2 - coroutine iniciada")
+            withContext(NonCancellable) {
                 try {
-                    userRepository.updateFcmToken("")
+                    android.util.Log.d("LOGOUT", "3 - limpando FCM token")
+                    try {
+                        userRepository.updateFcmToken("")
+                        android.util.Log.d("LOGOUT", "4 - FCM token limpo")
+                    } catch (e: Exception) {
+                        android.util.Log.w("LOGOUT", "4w - FCM falhou (ignorado): ${e.message}")
+                    }
+                    android.util.Log.d("LOGOUT", "5 - chamando signOut()")
                     SupabaseClientProvider.auth.signOut()
+                    android.util.Log.d("LOGOUT", "6 - signOut() concluído")
                 } catch (e: Exception) {
-                    /* ignora falhas de rede no logout */
+                    android.util.Log.e("LOGOUT", "ERRO: ${e::class.simpleName} - ${e.message}")
                 } finally {
-                    // postValue garante entrega na main thread vinda de coroutine
-                    _logoutEvent.postValue(Unit)
+                    android.util.Log.d("LOGOUT", "7 - chamando onLogoutDone na main thread")
+                    withContext(Dispatchers.Main) {
+                        android.util.Log.d("LOGOUT", "8 - onLogoutDone() executando")
+                        onLogoutDone()
+                    }
                 }
             }
         }
@@ -124,4 +118,3 @@ class ProfileViewModel(
 
     fun clearUpdateResult() { _updateResult.value = null }
 }
-

@@ -55,4 +55,14 @@ class UserRepository {
             }.decodeList()
         } catch (e: Exception) { emptyList() }
     }
+
+    /** Cruza lista de números de telefone com usuários cadastrados */
+    suspend fun getUsersByPhones(phones: List<String>): List<UserModel> {
+        if (phones.isEmpty()) return emptyList()
+        return try {
+            db.from("users").select {
+                filter { isIn("phone", phones) }
+            }.decodeList()
+        } catch (e: Exception) { emptyList() }
+    }
 }

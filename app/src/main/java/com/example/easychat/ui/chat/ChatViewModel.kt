@@ -1,10 +1,12 @@
 package com.example.easychat.ui.chat
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.easychat.data.local.LocalMessageRepository
 import com.example.easychat.data.repository.ChatRepository
 import com.example.easychat.data.repository.MediaRepository
 import com.example.easychat.model.ChatMessageModel
@@ -26,11 +28,16 @@ import java.time.ZoneId
 class ChatViewModel(
     val otherUser: UserModel,
     private val chatRepository: ChatRepository = ChatRepository(),
-    private val mediaRepository: MediaRepository = MediaRepository()
+    private val mediaRepository: MediaRepository = MediaRepository(),
+    private var localRepo: LocalMessageRepository? = null
 ) : ViewModel() {
 
     private val _chatroom = MutableLiveData<ChatroomModel?>()
     val chatroom: LiveData<ChatroomModel?> = _chatroom
+
+    // Status do outro usuário em tempo real
+    private val _otherUserLive = MutableLiveData<UserModel>(otherUser)
+    val otherUserLive: LiveData<UserModel> = _otherUserLive
 
     private val _allMessages = mutableListOf<ChatMessageModel>()
 
@@ -50,10 +57,18 @@ class ChatViewModel(
     val error: LiveData<String?> = _error
 
     private var realtimeChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
+    private var userStatusChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
     private var currentFilter: String = ""
     private val currentUserId = SupabaseClientProvider.currentUserId()
 
-    init { loadOrCreateChatroom() }
+    fun initLocalRepo(context: Context) {
+        if (localRepo == null) localRepo = LocalMessageRepository(context)
+    }
+
+    init {
+        loadOrCreateChatroom()
+        subscribeToUserStatus()
+    }
 
     private fun loadOrCreateChatroom() {
         viewModelScope.launch {
@@ -70,23 +85,40 @@ class ChatViewModel(
     }
 
     private suspend fun loadMessages(chatroomId: String) {
-        val remote = chatRepository.getMessages(chatroomId)
-        _allMessages.clear()
-        _allMessages.addAll(remote)
-        publishMessages()
+        // 1. Exibe cache local imediatamente (boa UX offline)
+        localRepo?.getMessages(chatroomId)?.let { cached ->
+            if (cached.isNotEmpty()) {
+                _allMessages.clear()
+                _allMessages.addAll(cached)
+                publishMessages()
+            }
+        }
+        // 2. Busca remoto e atualiza
+        try {
+            val remote = chatRepository.getMessages(chatroomId)
+            _allMessages.clear()
+            _allMessages.addAll(remote)
+            publishMessages()
+            localRepo?.saveMessages(remote)
+            markAllUnreadAsRead(chatroomId)
+        } catch (e: Exception) {
+            // Se falhou (offline), mantém cache local já exibido
+            android.util.Log.w("OFFLINE", "Sem conexão, usando cache: ${e.message}")
+        }
     }
 
     private suspend fun loadPinnedMessage(chatroomId: String) {
-        val pinned = chatRepository.getPinnedMessage(chatroomId)
-        _pinnedMessageUi.postValue(pinned?.let { toUiModel(it) })
+        try {
+            val pinned = chatRepository.getPinnedMessage(chatroomId)
+            _pinnedMessageUi.postValue(pinned?.let { toUiModel(it) })
+        } catch (e: Exception) { /* ignora offline */ }
     }
 
     private fun subscribeToRealtime(chatroomId: String) {
         viewModelScope.launch {
             try {
-                // Remove canal anterior antes de criar um novo (evita duplicação de eventos)
                 realtimeChannel?.let {
-                    try { SupabaseClientProvider.realtime.removeChannel(it) } catch (e: Exception) { /* ignora */ }
+                    try { SupabaseClientProvider.realtime.removeChannel(it) } catch (e: Exception) { }
                 }
                 realtimeChannel = null
 
@@ -94,6 +126,7 @@ class ChatViewModel(
                     .channel("messages_${chatroomId}_${System.currentTimeMillis()}")
                 realtimeChannel = channel
 
+                // Novas mensagens
                 channel.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
                     table = "messages"
                 }.onEach { change ->
@@ -102,6 +135,21 @@ class ChatViewModel(
                         _allMessages.none { it.id == newMsg.id }) {
                         _allMessages.add(0, newMsg)
                         publishMessages()
+                        localRepo?.saveMessage(newMsg)
+                        if (newMsg.senderId != currentUserId) markAsRead(newMsg.id)
+                    }
+                }.launchIn(viewModelScope)
+
+                // Updates de status (lida/entregue)
+                channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
+                    table = "messages"
+                }.onEach { change ->
+                    val updated = change.decodeRecord<ChatMessageModel>()
+                    val idx = _allMessages.indexOfFirst { it.id == updated.id }
+                    if (idx >= 0) {
+                        _allMessages[idx] = updated
+                        publishMessages()
+                        localRepo?.updateStatus(updated.id, updated.status)
                     }
                 }.launchIn(viewModelScope)
 
@@ -112,33 +160,19 @@ class ChatViewModel(
         }
     }
 
-    /**
-     * Chamado pela Activity no onResume para garantir que mensagens perdidas
-     * enquanto o app estava em background sejam carregadas e o canal realtime
-     * seja reestabelecido se necessário.
-     */
+    /** Recarrega ao voltar pro app — garante mensagens recebidas em background */
     fun refreshOnResume() {
         val chatroomId = _chatroom.value?.id ?: return
         viewModelScope.launch {
             try {
-                // Recarrega mensagens para pegar as que chegaram em background
                 loadMessages(chatroomId)
-                // Reinscreve no canal realtime se ele não estiver ativo
-                val channel = realtimeChannel
-                if (channel == null) {
-                    subscribeToRealtime(chatroomId)
-                }
+                if (realtimeChannel == null) subscribeToRealtime(chatroomId)
             } catch (e: Exception) {
                 android.util.Log.e("REALTIME", "Erro ao reconectar: ${e.message}")
             }
         }
     }
 
-    /**
-     * Converte domínio → UiModels aplicando filtro, descriptografia, formatação
-     * e — FIX — inclui o keyword atual em cada UiModel para que o DiffUtil
-     * detecte a mudança de keyword e force o redesenho do highlight.
-     */
     private fun publishMessages() {
         val filtered = if (currentFilter.isBlank()) _allMessages.toList()
         else _allMessages.filter {
@@ -162,11 +196,12 @@ class ChatViewModel(
             locationLat      = msg.locationLat,
             locationLng      = msg.locationLng,
             timeFormatted    = formatTime(msg.createdAt),
-            statusSymbol     = when (msg.status) { "read", "delivered" -> "✓✓"; else -> "✓" },
+            statusSymbol     = when (msg.status) {
+                "read", "delivered" -> "✓✓"
+                else                -> "✓"
+            },
             showStatus       = isMe,
             isPinned         = msg.isPinned,
-            // FIX: keyword incluída no UiModel — quando muda, areContentsTheSame
-            // retorna false e o DiffUtil força onBindViewHolder para todos os itens
             highlightKeyword = currentFilter,
             source           = msg
         )
@@ -178,11 +213,56 @@ class ChatViewModel(
         String.format("%02d:%02d", local.hour, local.minute)
     } catch (e: Exception) { "" }
 
+    private fun markAllUnreadAsRead(chatroomId: String) {
+        viewModelScope.launch {
+            try {
+                val unread = _allMessages.filter {
+                    it.senderId != currentUserId && it.status != "read"
+                }
+                unread.forEach { chatRepository.markMessageAsRead(it.id) }
+                unread.forEach { msg ->
+                    val idx = _allMessages.indexOfFirst { it.id == msg.id }
+                    if (idx >= 0) _allMessages[idx] = msg.copy(status = "read")
+                    localRepo?.updateStatus(msg.id, "read")
+                }
+                if (unread.isNotEmpty()) publishMessages()
+            } catch (e: Exception) { /* ignora offline */ }
+        }
+    }
+
+    /** Escuta mudanças de status/last_seen do outro usuário em tempo real */
+    /** Escuta mudanças de status/last_seen do outro usuário em tempo real */
+    private fun subscribeToUserStatus() {
+        viewModelScope.launch {
+            try {
+                val channel = SupabaseClientProvider.realtime
+                    .channel("user_status_${otherUser.id}")
+                userStatusChannel = channel
+
+                channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
+                    table = "users"
+                }.onEach { change ->
+                    val updated = change.decodeRecord<UserModel>()
+                    // Filtra client-side — só atualiza se for o outro usuário desta conversa
+                    if (updated.id == otherUser.id) {
+                        _otherUserLive.postValue(updated)
+                    }
+                }.launchIn(viewModelScope)
+
+                channel.subscribe()
+            } catch (e: Exception) {
+                android.util.Log.e("REALTIME", "Erro status user: ${e.message}")
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         viewModelScope.launch {
-            try { realtimeChannel?.let { SupabaseClientProvider.realtime.removeChannel(it) } }
-            catch (e: Exception) { /* ignora */ }
+            try {
+                realtimeChannel?.let { SupabaseClientProvider.realtime.removeChannel(it) }
+                userStatusChannel?.let { SupabaseClientProvider.realtime.removeChannel(it) }
+            } catch (e: Exception) { }
         }
     }
 
@@ -276,7 +356,10 @@ class ChatViewModel(
 
     fun markAsRead(messageId: String) {
         viewModelScope.launch {
-            try { chatRepository.markMessageAsRead(messageId) } catch (e: Exception) { }
+            try {
+                chatRepository.markMessageAsRead(messageId)
+                localRepo?.updateStatus(messageId, "read")
+            } catch (e: Exception) { }
         }
     }
 

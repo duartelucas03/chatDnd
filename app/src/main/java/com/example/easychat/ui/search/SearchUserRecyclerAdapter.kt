@@ -5,6 +5,7 @@ import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
@@ -19,8 +20,21 @@ import com.example.easychat.utils.AndroidUtil
 import com.example.easychat.utils.SupabaseClientProvider
 
 class SearchUserRecyclerAdapter(
-    private val context: Context
+    private val context: Context,
+    private val onSelectionChanged: ((List<UserModel>) -> Unit)? = null
 ) : ListAdapter<UserModel, SearchUserRecyclerAdapter.UserViewHolder>(DIFF) {
+
+    var selectionMode = false
+        set(value) {
+            field = value
+            if (!value) selectedUsers.clear()
+            notifyDataSetChanged()
+        }
+
+    private val selectedUsers = mutableSetOf<String>()
+
+    fun getSelectedUsers(): List<UserModel> =
+        currentList.filter { selectedUsers.contains(it.id) }
 
     companion object {
         private val DIFF = object : DiffUtil.ItemCallback<UserModel>() {
@@ -43,10 +57,12 @@ class SearchUserRecyclerAdapter(
         val usernameText: TextView = view.findViewById(R.id.user_name_text)
         val phoneText: TextView    = view.findViewById(R.id.phone_text)
         val profilePic: ImageView  = view.findViewById(R.id.profile_pic_image_view)
+        val checkBox: CheckBox?    = view.findViewById(R.id.user_checkbox)
 
         fun bind(user: UserModel) {
-            usernameText.text = if (user.id == SupabaseClientProvider.currentUserId())
-                "${user.username} (Eu)" else user.username
+            val isSelf = user.id == SupabaseClientProvider.currentUserId()
+
+            usernameText.text = if (isSelf) "${user.username} (Eu)" else user.username
             phoneText.text = user.phone
 
             if (!user.avatarUrl.isNullOrBlank()) {
@@ -55,14 +71,32 @@ class SearchUserRecyclerAdapter(
                     .into(profilePic)
             }
 
-            itemView.setOnClickListener {
-                // Bloqueia entrar no próprio chat
-                if (user.id == SupabaseClientProvider.currentUserId()) return@setOnClickListener
-                val intent = Intent(context, ChatActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            // Modo seleção (criar grupo)
+            if (selectionMode && !isSelf) {
+                checkBox?.visibility = View.VISIBLE
+                checkBox?.isChecked = selectedUsers.contains(user.id)
+                itemView.alpha = 1f
+
+                val toggle = {
+                    if (selectedUsers.contains(user.id)) selectedUsers.remove(user.id)
+                    else selectedUsers.add(user.id)
+                    checkBox?.isChecked = selectedUsers.contains(user.id)
+                    onSelectionChanged?.invoke(getSelectedUsers())
                 }
-                AndroidUtil.passUserModelAsIntent(intent, user)
-                context.startActivity(intent)
+                itemView.setOnClickListener { toggle() }
+                checkBox?.setOnClickListener { toggle() }
+            } else {
+                checkBox?.visibility = View.GONE
+                itemView.alpha = if (isSelf && selectionMode) 0.4f else 1f
+
+                itemView.setOnClickListener {
+                    if (isSelf) return@setOnClickListener
+                    val intent = Intent(context, ChatActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    AndroidUtil.passUserModelAsIntent(intent, user)
+                    context.startActivity(intent)
+                }
             }
         }
     }
