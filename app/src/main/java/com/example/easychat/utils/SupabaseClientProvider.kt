@@ -13,12 +13,14 @@ import io.github.jan.supabase.storage.storage
 
 object SupabaseClientProvider {
 
-    // TODO: mover para local.properties + BuildConfig antes de publicar.
     val client: SupabaseClient = createSupabaseClient(
         supabaseUrl  = "https://kylkgbuczqvmkxeykhth.supabase.co",
         supabaseKey  = "sb_publishable_eGzic_TV6-ZhBO4q6E8EAg_yGL_QPPd"
     ) {
-        install(Auth)
+        install(Auth) {
+            autoSaveToStorage = true
+            alwaysAutoRefresh = true
+        }
         install(Postgrest)
         install(Realtime)
         install(Storage)
