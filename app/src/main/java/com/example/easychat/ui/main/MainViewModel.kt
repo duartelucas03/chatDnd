@@ -145,8 +145,12 @@ class MainViewModel(
                 channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
                     table = "chatrooms"
                 }.onEach { _ ->
-                    // Ao receber qualquer update em chatrooms, recarrega a lista completa
-                    // (garante consistência dos UiModels sem lógica de merge parcial)
+                    loadRecentChats()
+                }.launchIn(viewModelScope)
+
+                channel.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
+                    table = "messages"
+                }.onEach { _ ->
                     loadRecentChats()
                 }.launchIn(viewModelScope)
 
