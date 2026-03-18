@@ -8,6 +8,7 @@ import androidx.core.app.NotificationCompat
 import com.example.easychat.R
 import com.example.easychat.data.repository.UserRepository
 import com.example.easychat.ui.auth.SplashActivity
+import com.example.easychat.utils.CryptoManager
 import com.example.easychat.utils.SupabaseClientProvider
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -28,28 +29,36 @@ class FCMNotificationService : FirebaseMessagingService() {
         }
     }
 
-    // FIX: implementado para exibir notificação local quando o app está em foreground.
-    // Em background, o FCM já exibe automaticamente via notification payload.
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
 
-        val title = message.notification?.title
-            ?: message.data["title"]
+        val title = message.data["title"]
+            ?: message.notification?.title
             ?: "Nova mensagem"
-        val body = message.notification?.body
-            ?: message.data["body"]
+
+        // FIX: o corpo da notificação vem do campo "body" do data payload,
+        // que contém o conteúdo cru do banco — potencialmente criptografado.
+        // Tentamos descriptografar; se não for texto criptografado (ex: "📷 Foto"),
+        // o CryptoManager retorna o texto original sem alteração.
+        val rawBody = message.data["body"]
+            ?: message.notification?.body
             ?: ""
+
+        val body = resolveNotificationBody(
+            rawBody  = rawBody,
+            type     = message.data["type"] ?: "text",
+            senderName = message.data["senderName"] ?: ""
+        )
 
         val userId = message.data["userId"] ?: ""
 
-        // Intent que abre o chat correto ao tocar na notificação
         val intent = Intent(this, SplashActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             if (userId.isNotBlank()) putExtra("userId", userId)
         }
 
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
+            this, System.currentTimeMillis().toInt(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -57,13 +66,41 @@ class FCMNotificationService : FirebaseMessagingService() {
             .setSmallIcon(R.drawable.chat_icon)
             .setContentTitle(title)
             .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    /**
+     * Resolve o texto a exibir na notificação de acordo com o tipo da mensagem.
+     *
+     * A Edge Function do Supabase envia no campo "body" o conteúdo cru do banco
+     * (já que ela não tem como saber a chave AES do app). Por isso:
+     * - Para "text": descriptografa com CryptoManager.decrypt(). Se o texto não
+     *   estiver criptografado (mensagem antiga, emoji, etc.), decrypt() retorna
+     *   o valor original sem lançar exceção.
+     * - Para outros tipos: usa um texto amigável fixo, pois não há texto a descriptografar.
+     */
+    private fun resolveNotificationBody(
+        rawBody: String,
+        type: String,
+        senderName: String
+    ): String {
+        val content = when (type) {
+            "image"    -> "📷 Foto"
+            "audio"    -> "🎵 Áudio"
+            "location" -> "📍 Localização"
+            "video"    -> "🎬 Vídeo"
+            else       -> CryptoManager.decrypt(rawBody) // "text" ou desconhecido
+        }
+        // Se a Edge Function enviar o nome do remetente, exibe "Nome: mensagem"
+        return if (senderName.isNotBlank()) "$senderName: $content" else content
     }
 
     companion object {
