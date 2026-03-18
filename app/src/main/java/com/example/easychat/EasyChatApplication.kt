@@ -9,35 +9,33 @@ import com.example.easychat.utils.SupabaseClientProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class EasyChatApplication : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    // Inicialização lazy — só cria quando o primeiro setStatus() for chamado,
-    // garantindo que o Looper já está pronto e o Ktor pode inicializar corretamente
     private val userRepository by lazy { UserRepository() }
 
     override fun onCreate() {
         super.onCreate()
 
-        // Registra o observer APÓS super.onCreate() — Looper já está configurado aqui
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
-                setStatus("online")
+                setStatus("online", delayMs = 1500)
             }
             override fun onStop(owner: LifecycleOwner) {
-                setStatus("offline")
+                setStatus("offline", delayMs = 0)
             }
         })
     }
 
-    private fun setStatus(status: String) {
-        // Só opera se houver sessão ativa — evita chamadas desnecessárias ao banco
-        if (!SupabaseClientProvider.isLoggedIn()) return
+    private fun setStatus(status: String, delayMs: Long = 0) {
         appScope.launch {
             try {
+                if (delayMs > 0) delay(delayMs)
+                // Após o delay, o Auth já carregou a sessão do storage
+                if (!SupabaseClientProvider.isLoggedIn()) return@launch
                 userRepository.updateStatus(status)
             } catch (e: Exception) {
                 // Silencioso — falha de rede não deve impactar o app
