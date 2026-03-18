@@ -14,16 +14,13 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
 import com.example.easychat.databinding.FragmentProfileBinding
 import com.example.easychat.ui.auth.SplashActivity
 import com.example.easychat.utils.AndroidUtil
-import com.example.easychat.utils.SupabaseClientProvider
 import com.github.dhaval2404.imagepicker.ImagePicker
 import com.google.firebase.messaging.FirebaseMessaging
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 class ProfileFragment : Fragment() {
 
@@ -39,18 +36,17 @@ class ProfileFragment : Fragment() {
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
                 selectedImageUri = uri
-                Glide.with(this)
-                    .load(uri)
-                    .apply(RequestOptions.circleCropTransform())
+                Glide.with(this).load(uri)
+                    .apply(RequestOptions.circleCropTransform()
+                        .skipMemoryCache(true)
+                        .diskCacheStrategy(DiskCacheStrategy.NONE))
                     .into(binding.profileImageView)
             }
         }
     }
 
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
         _binding = FragmentProfileBinding.inflate(inflater, container, false)
         return binding.root
@@ -63,7 +59,6 @@ class ProfileFragment : Fragment() {
     }
 
     private fun setupClickListeners() {
-        // ID no XML é "profle_update_btn" (typo original mantido)
         binding.profleUpdateBtn.setOnClickListener {
             val newUsername = binding.profileUsername.text.toString().trim()
             if (newUsername.length < 3) {
@@ -71,39 +66,31 @@ class ProfileFragment : Fragment() {
                 return@setOnClickListener
             }
             viewModel.updateProfile(newUsername, selectedImageUri, requireContext().contentResolver)
+            selectedImageUri = null
         }
 
+        // A View delega o logout ao ViewModel; só trata a navegação após o evento
         binding.logoutBtn.setOnClickListener {
-            FirebaseMessaging.getInstance().deleteToken().addOnCompleteListener {
-                CoroutineScope(Dispatchers.IO).launch {
-                    SupabaseClientProvider.auth.signOut()
-                }
-                startActivity(
-                    Intent(requireContext(), SplashActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    }
-                )
+            // FirebaseMessaging.deleteToken() precisa do contexto Android — fica na View,
+            // mas o ViewModel decide quando e como encerrar a sessão
+            viewModel.logout { onTokenDeleted ->
+                FirebaseMessaging.getInstance().deleteToken()
+                    .addOnCompleteListener { onTokenDeleted() }
             }
         }
 
         binding.profileImageView.setOnClickListener {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_MEDIA_IMAGES)
-                    != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(arrayOf(Manifest.permission.READ_MEDIA_IMAGES), 100)
-                    return@setOnClickListener
-                }
-            } else {
-                if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 100)
-                    return@setOnClickListener
-                }
+            val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+                Manifest.permission.READ_MEDIA_IMAGES
+            else
+                Manifest.permission.READ_EXTERNAL_STORAGE
+
+            if (ContextCompat.checkSelfPermission(requireContext(), permission)
+                != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(permission), 100)
+                return@setOnClickListener
             }
-            ImagePicker.with(this)
-                .cropSquare()
-                .compress(512)
-                .maxResultSize(512, 512)
+            ImagePicker.with(this).cropSquare().compress(512).maxResultSize(512, 512)
                 .createIntent { intent -> imagePickLauncher.launch(intent) }
         }
     }
@@ -111,7 +98,7 @@ class ProfileFragment : Fragment() {
     private fun observeViewModel() {
         viewModel.loading.observe(viewLifecycleOwner) { isLoading ->
             binding.profileProgressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
-            binding.profleUpdateBtn.visibility = if (isLoading) View.GONE else View.VISIBLE
+            binding.profleUpdateBtn.visibility     = if (isLoading) View.GONE    else View.VISIBLE
         }
 
         viewModel.user.observe(viewLifecycleOwner) { user ->
@@ -119,20 +106,27 @@ class ProfileFragment : Fragment() {
             binding.profileUsername.setText(user.username)
             binding.profilePhone.setText(user.phone)
             if (!user.avatarUrl.isNullOrBlank()) {
-                Glide.with(this)
-                    .load(user.avatarUrl)
-                    .apply(RequestOptions.circleCropTransform())
+                Glide.with(this).load(user.avatarUrl)
+                    .apply(RequestOptions.circleCropTransform()
+                        .skipMemoryCache(true)
+                        .diskCacheStrategy(DiskCacheStrategy.NONE))
                     .into(binding.profileImageView)
             }
         }
 
         viewModel.updateResult.observe(viewLifecycleOwner) { success ->
             success ?: return@observe
-            AndroidUtil.showToast(
-                requireContext(),
-                if (success) "Perfil atualizado!" else "Falha ao atualizar"
-            )
+            AndroidUtil.showToast(requireContext(), if (success) "Perfil atualizado!" else "Falha ao atualizar")
             viewModel.clearUpdateResult()
+        }
+
+        // A navegação pós-logout é responsabilidade da View, mas o gatilho vem do ViewModel
+        viewModel.logoutComplete.observe(viewLifecycleOwner) { done ->
+            if (!done) return@observe
+            startActivity(Intent(requireContext(), SplashActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            })
+            viewModel.clearLogoutComplete()
         }
     }
 

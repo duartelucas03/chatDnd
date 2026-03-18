@@ -41,19 +41,16 @@ class SearchUserRecyclerAdapter(
 
     inner class UserViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val usernameText: TextView = view.findViewById(R.id.user_name_text)
-        val phoneText: TextView = view.findViewById(R.id.phone_text)
-        val profilePic: ImageView = view.findViewById(R.id.profile_pic_image_view)
+        val phoneText: TextView    = view.findViewById(R.id.phone_text)
+        val profilePic: ImageView  = view.findViewById(R.id.profile_pic_image_view)
 
         fun bind(user: UserModel) {
-            usernameText.text =
-                if (user.id == SupabaseClientProvider.currentUserId()) "${user.username} (Eu)"
-                else user.username
-
+            usernameText.text = if (user.id == SupabaseClientProvider.currentUserId())
+                "${user.username} (Eu)" else user.username
             phoneText.text = user.phone
 
             if (!user.avatarUrl.isNullOrBlank()) {
-                Glide.with(context)
-                    .load(user.avatarUrl)
+                Glide.with(context).load(user.avatarUrl)
                     .apply(RequestOptions.circleCropTransform())
                     .into(profilePic)
             }

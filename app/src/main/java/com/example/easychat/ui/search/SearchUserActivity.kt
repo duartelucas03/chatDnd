@@ -22,7 +22,7 @@ class SearchUserActivity : AppCompatActivity() {
         setupListeners()
         observeViewModel()
 
-        // ID no XML é "seach_username_input" (typo original mantido)
+        // ID no XML é "seach_username_input" (typo original mantido por compatibilidade)
         binding.seachUsernameInput.requestFocus()
     }
 
@@ -50,9 +50,10 @@ class SearchUserActivity : AppCompatActivity() {
             adapter.submitList(users)
         }
 
+        // FIX: loading agora controla visibilidade do botão de busca
         viewModel.loading.observe(this) { isLoading ->
-            // fragment_chat não tem progressBar, mas search_user não tem no XML original
-            // então apenas ocultamos o botão durante a busca
+            binding.searchUserBtn.isEnabled = !isLoading
+            binding.searchUserBtn.alpha     = if (isLoading) 0.5f else 1.0f
         }
     }
 }

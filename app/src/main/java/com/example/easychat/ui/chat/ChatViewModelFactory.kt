@@ -9,7 +9,6 @@ class ChatViewModelFactory(
     private val otherUser: UserModel,
     private val context: Context
 ) : ViewModelProvider.Factory {
-
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")

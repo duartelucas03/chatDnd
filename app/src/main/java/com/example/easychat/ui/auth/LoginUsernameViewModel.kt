@@ -13,13 +13,13 @@ class LoginUsernameViewModel(
     private val userRepository: UserRepository = UserRepository()
 ) : ViewModel() {
 
-    private val _loading = MutableLiveData<Boolean>()
+    private val _loading          = MutableLiveData<Boolean>()
     val loading: LiveData<Boolean> = _loading
 
-    private val _saveResult = MutableLiveData<Boolean>()
+    private val _saveResult          = MutableLiveData<Boolean>()
     val saveResult: LiveData<Boolean> = _saveResult
 
-    private val _existingUsername = MutableLiveData<String?>()
+    private val _existingUsername          = MutableLiveData<String?>()
     val existingUsername: LiveData<String?> = _existingUsername
 
     fun loadExistingUser() {
@@ -36,14 +36,9 @@ class LoginUsernameViewModel(
         viewModelScope.launch {
             try {
                 val currentId = SupabaseClientProvider.currentUserId()
-                // Tenta carregar usuário existente para preservar dados anteriores
-                val existing = userRepository.getCurrentUser()
+                val existing  = userRepository.getCurrentUser()
                 val user = existing?.copy(username = username)
-                    ?: UserModel(
-                        id = currentId,
-                        phone = phone,
-                        username = username
-                    )
+                    ?: UserModel(id = currentId, phone = phone, username = username)
                 userRepository.saveUser(user)
                 _saveResult.postValue(true)
             } catch (e: Exception) {

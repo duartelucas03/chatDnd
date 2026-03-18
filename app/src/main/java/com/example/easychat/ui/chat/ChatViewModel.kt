@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.easychat.data.repository.ChatRepository
 import com.example.easychat.data.repository.MediaRepository
 import com.example.easychat.model.ChatMessageModel
+import com.example.easychat.model.ChatMessageUiModel
 import com.example.easychat.model.ChatroomModel
 import com.example.easychat.model.UserModel
 import com.example.easychat.utils.CryptoManager
@@ -19,6 +20,8 @@ import io.github.jan.supabase.realtime.postgresChangeFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
 
 class ChatViewModel(
     val otherUser: UserModel,
@@ -29,18 +32,19 @@ class ChatViewModel(
     private val _chatroom = MutableLiveData<ChatroomModel?>()
     val chatroom: LiveData<ChatroomModel?> = _chatroom
 
-    private val _allMessages = MutableLiveData<List<ChatMessageModel>>(emptyList())
+    // Lista completa de modelos de domínio (fonte da verdade interna)
+    private val _allMessages = mutableListOf<ChatMessageModel>()
 
-    private val _messages = MutableLiveData<List<ChatMessageModel>>(emptyList())
-    val messages: LiveData<List<ChatMessageModel>> = _messages
+    // O que a View observa: UiModels já prontos para exibição
+    private val _messages = MutableLiveData<List<ChatMessageUiModel>>(emptyList())
+    val messages: LiveData<List<ChatMessageUiModel>> = _messages
 
-    private val _pinnedMessage = MutableLiveData<ChatMessageModel?>()
-    val pinnedMessage: LiveData<ChatMessageModel?> = _pinnedMessage
+    // Mensagem fixada já descriptografada para exibição
+    private val _pinnedMessageUi = MutableLiveData<ChatMessageUiModel?>()
+    val pinnedMessage: LiveData<ChatMessageUiModel?> = _pinnedMessageUi
 
     private val _messageSent = MutableLiveData<Boolean?>()
     val messageSent: LiveData<Boolean?> = _messageSent
-
-    private var realtimeChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
 
     private val _isUploading = MutableLiveData<Boolean>(false)
     val isUploading: LiveData<Boolean> = _isUploading
@@ -48,25 +52,21 @@ class ChatViewModel(
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
 
+    private var realtimeChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
     private var currentFilter: String = ""
+    private val currentUserId = SupabaseClientProvider.currentUserId()
 
-    init {
-        loadOrCreateChatroom()
-    }
+    init { loadOrCreateChatroom() }
 
     private fun loadOrCreateChatroom() {
         viewModelScope.launch {
             try {
-                val room = chatRepository.getOrCreateDirectChatroom(
-                    currentUserId = SupabaseClientProvider.currentUserId(),
-                    otherUserId = otherUser.id
-                )
+                val room = chatRepository.getOrCreateDirectChatroom(currentUserId, otherUser.id)
                 _chatroom.postValue(room)
                 loadMessages(room.id)
                 loadPinnedMessage(room.id)
                 subscribeToRealtime(room.id)
             } catch (e: Exception) {
-                android.util.Log.e("CHAT_ERROR", "Erro ao carregar chat: ${e.message}", e)
                 _error.postValue("Erro ao carregar conversa: ${e.message}")
             }
         }
@@ -74,25 +74,20 @@ class ChatViewModel(
 
     private suspend fun loadMessages(chatroomId: String) {
         val remote = chatRepository.getMessages(chatroomId)
-        _allMessages.value = remote
-        _messages.value = remote
+        _allMessages.clear()
+        _allMessages.addAll(remote)
+        publishMessages()
     }
 
     private suspend fun loadPinnedMessage(chatroomId: String) {
-        _pinnedMessage.postValue(chatRepository.getPinnedMessage(chatroomId))
+        val pinned = chatRepository.getPinnedMessage(chatroomId)
+        _pinnedMessageUi.postValue(pinned?.let { toUiModel(it) })
     }
-
-
 
     private fun subscribeToRealtime(chatroomId: String) {
         viewModelScope.launch {
             try {
-                // Remove canal anterior se existir
-                realtimeChannel?.let {
-                    SupabaseClientProvider.realtime.removeChannel(it)
-                }
-
-                // Cria novo canal com nome único por sessão
+                realtimeChannel?.let { SupabaseClientProvider.realtime.removeChannel(it) }
                 val channel = SupabaseClientProvider.realtime
                     .channel("messages_${chatroomId}_${System.currentTimeMillis()}")
                 realtimeChannel = channel
@@ -101,16 +96,10 @@ class ChatViewModel(
                     table = "messages"
                 }.onEach { change ->
                     val newMsg = change.decodeRecord<ChatMessageModel>()
-                    if (newMsg.chatroomId == chatroomId) {
-                        val current = _allMessages.value.orEmpty().toMutableList()
-                        if (current.none { it.id == newMsg.id }) {
-                            current.add(0, newMsg)
-                            _allMessages.value = current
-                            _messages.value = if (currentFilter.isBlank()) current
-                            else current.filter {
-                                it.content?.contains(currentFilter, ignoreCase = true) == true
-                            }
-                        }
+                    if (newMsg.chatroomId == chatroomId &&
+                        _allMessages.none { it.id == newMsg.id }) {
+                        _allMessages.add(0, newMsg)
+                        publishMessages()
                     }
                 }.launchIn(viewModelScope)
 
@@ -121,27 +110,65 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Converte a lista interna de domínio para UiModels,
+     * aplicando filtro, descriptografia e formatação — tudo no ViewModel.
+     */
+    private fun publishMessages() {
+        val filtered = if (currentFilter.isBlank()) _allMessages.toList()
+        else _allMessages.filter {
+            // Filtra pelo texto descriptografado
+            CryptoManager.decrypt(it.content ?: "").contains(currentFilter, ignoreCase = true)
+        }
+        _messages.postValue(filtered.map { toUiModel(it) })
+    }
+
+    private fun toUiModel(msg: ChatMessageModel): ChatMessageUiModel {
+        val isMe = msg.senderId == currentUserId
+        val decryptedText = if (msg.type == "text" || msg.type == null)
+            CryptoManager.decrypt(msg.content ?: "") else null
+
+        return ChatMessageUiModel(
+            id             = msg.id,
+            localId        = msg.localId,
+            isFromMe       = isMe,
+            type           = msg.type ?: "text",
+            text           = decryptedText,
+            mediaUrl       = msg.mediaUrl,
+            locationLat    = msg.locationLat,
+            locationLng    = msg.locationLng,
+            timeFormatted  = formatTime(msg.createdAt),
+            statusSymbol   = when (msg.status) { "read", "delivered" -> "✓✓"; else -> "✓" },
+            showStatus     = isMe,
+            isPinned       = msg.isPinned,
+            source         = msg
+        )
+    }
+
+    private fun formatTime(createdAt: String): String = try {
+        val instant = Instant.parse(createdAt)
+        val local   = instant.atZone(ZoneId.systemDefault())
+        String.format("%02d:%02d", local.hour, local.minute)
+    } catch (e: Exception) { "" }
+
     override fun onCleared() {
         super.onCleared()
         viewModelScope.launch {
-            realtimeChannel?.let {
-                SupabaseClientProvider.realtime.removeChannel(it)
-            }
+            try { realtimeChannel?.let { SupabaseClientProvider.realtime.removeChannel(it) } }
+            catch (e: Exception) { /* ignora */ }
         }
     }
 
     fun sendTextMessage(text: String) {
         if (text.isBlank()) return
         val chatroomId = _chatroom.value?.id ?: return
-
         viewModelScope.launch {
             try {
-                val encryptedText = CryptoManager.encrypt(text)
                 chatRepository.sendMessage(
                     chatroomId = chatroomId,
-                    senderId = SupabaseClientProvider.currentUserId(),
-                    content = encryptedText,
-                    type = "text"
+                    senderId   = currentUserId,
+                    content    = CryptoManager.encrypt(text),
+                    type       = "text"
                 )
                 _messageSent.postValue(true)
             } catch (e: Exception) {
@@ -151,121 +178,81 @@ class ChatViewModel(
         }
     }
 
-    // Req. 7 + Req. 15 (câmera)
     fun sendImageMessage(uri: Uri, contentResolver: android.content.ContentResolver) {
         val chatroomId = _chatroom.value?.id ?: return
         _isUploading.value = true
-
         viewModelScope.launch {
             try {
                 val bytes = contentResolver.openInputStream(uri)?.readBytes() ?: return@launch
                 val url = mediaRepository.uploadImage(chatroomId, bytes)
-                chatRepository.sendMessage(
-                    chatroomId = chatroomId,
-                    senderId = SupabaseClientProvider.currentUserId(),
-                    content = "",
-                    type = "image",
-                    mediaUrl = url
-                )
+                chatRepository.sendMessage(chatroomId, currentUserId, "", "image", mediaUrl = url)
                 _messageSent.postValue(true)
             } catch (e: Exception) {
                 _error.postValue("Erro ao enviar imagem: ${e.message}")
-            } finally {
-                _isUploading.postValue(false)
-            }
+            } finally { _isUploading.postValue(false) }
         }
     }
 
-    // Req. 15 (microfone)
     fun sendAudioMessage(audioPath: String) {
         val chatroomId = _chatroom.value?.id ?: return
         _isUploading.value = true
-
         viewModelScope.launch {
             try {
                 val bytes = java.io.File(audioPath).readBytes()
                 val url = mediaRepository.uploadAudio(chatroomId, bytes)
-                chatRepository.sendMessage(
-                    chatroomId = chatroomId,
-                    senderId = SupabaseClientProvider.currentUserId(),
-                    content = "",
-                    type = "audio",
-                    mediaUrl = url
-                )
+                chatRepository.sendMessage(chatroomId, currentUserId, "", "audio", mediaUrl = url)
                 _messageSent.postValue(true)
             } catch (e: Exception) {
                 _error.postValue("Erro ao enviar áudio: ${e.message}")
-            } finally {
-                _isUploading.postValue(false)
-            }
+            } finally { _isUploading.postValue(false) }
         }
     }
 
-    // Req. 15 (GPS)
     fun sendLocationMessage(lat: Double, lng: Double) {
         val chatroomId = _chatroom.value?.id ?: return
-
         viewModelScope.launch {
             try {
                 chatRepository.sendMessage(
-                    chatroomId = chatroomId,
-                    senderId = SupabaseClientProvider.currentUserId(),
-                    content = "📍 Localização",
-                    type = "location",
+                    chatroomId  = chatroomId,
+                    senderId    = currentUserId,
+                    content     = "📍 Localização",
+                    type        = "location",
                     locationLat = lat,
                     locationLng = lng
                 )
                 _messageSent.postValue(true)
-            } catch (e: Exception) {
-                _error.postValue("Erro ao enviar localização: ${e.message}")
-            }
+            } catch (e: Exception) { _error.postValue("Erro ao enviar localização: ${e.message}") }
         }
     }
 
-    // Req. 13 — PIN
-    fun togglePin(message: ChatMessageModel) {
+    fun togglePin(uiModel: ChatMessageUiModel) {
         val chatroomId = _chatroom.value?.id ?: return
+        val message = uiModel.source
         viewModelScope.launch {
             try {
                 val newPinState = !message.isPinned
                 if (newPinState) {
-                    _pinnedMessage.value?.let { currentPinned ->
-                        if (currentPinned.id != message.id) {
-                            chatRepository.pinMessage(currentPinned.id, false)
-                        }
+                    _pinnedMessageUi.value?.source?.let { current ->
+                        if (current.id != message.id) chatRepository.pinMessage(current.id, false)
                     }
                 }
                 chatRepository.pinMessage(message.id, newPinState)
                 loadPinnedMessage(chatroomId)
-            } catch (e: Exception) {
-                _error.postValue("Erro ao fixar mensagem: ${e.message}")
-            }
+            } catch (e: Exception) { _error.postValue("Erro ao fixar mensagem: ${e.message}") }
         }
     }
 
-    // Req. 14 — FILTRO POR PALAVRA-CHAVE
     fun filterMessages(keyword: String) {
         currentFilter = keyword
-        applyFilter()
+        publishMessages()
     }
 
-    private fun applyFilter() {
-        val all = _allMessages.value.orEmpty()
-        _messages.postValue(
-            if (currentFilter.isBlank()) all
-            else all.filter { it.content?.contains(currentFilter, ignoreCase = true) == true  }
-        )
-    }
-
-    // Req. 3 — marcar como lida
     fun markAsRead(messageId: String) {
         viewModelScope.launch {
-            try {
-                chatRepository.markMessageAsRead(messageId)
-            } catch (e: Exception) { /* silencioso */ }
+            try { chatRepository.markMessageAsRead(messageId) } catch (e: Exception) { /* silencioso */ }
         }
     }
 
-    fun clearError() { _error.value = null }
+    fun clearError()       { _error.value = null }
     fun clearMessageSent() { _messageSent.value = null }
 }

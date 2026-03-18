@@ -9,13 +9,13 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ChatroomModel(
     val id: String = "",
-    @SerialName("is_group") val isGroup: Boolean = false,
+    @SerialName("is_group")               val isGroup: Boolean = false,
     val name: String? = null,
-    @SerialName("avatar_url") val avatarUrl: String? = null,
-    @SerialName("last_message") val lastMessage: String? = null,        // ← era String = ""
+    @SerialName("avatar_url")             val avatarUrl: String? = null,
+    @SerialName("last_message")           val lastMessage: String? = null,
     @SerialName("last_message_sender_id") val lastMessageSenderId: String? = null,
-    @SerialName("last_message_at") val lastMessageAt: String? = null,   // ← era String = ""
-    @SerialName("last_message_type") val lastMessageType: String? = null, // ← era String = "text"
-    @SerialName("created_by") val createdBy: String? = null,
-    @SerialName("created_at") val createdAt: String = ""
+    @SerialName("last_message_at")        val lastMessageAt: String? = null,
+    @SerialName("last_message_type")      val lastMessageType: String? = null,
+    @SerialName("created_by")             val createdBy: String? = null,
+    @SerialName("created_at")             val createdAt: String = ""
 ) : Parcelable

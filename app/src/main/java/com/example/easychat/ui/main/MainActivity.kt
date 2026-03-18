@@ -13,9 +13,11 @@ import com.google.firebase.messaging.FirebaseMessaging
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val viewModel: MainViewModel by viewModels()
 
-    private val chatFragment = ChatFragment()
+    // FIX: ViewModel único na Activity — compartilhado com os fragments via activityViewModels()
+    val viewModel: MainViewModel by viewModels()
+
+    private val chatFragment    = ChatFragment()
     private val profileFragment = ProfileFragment()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,10 +27,7 @@ class MainActivity : AppCompatActivity() {
 
         createNotificationChannel()
 
-        binding.mainSearchBtn.setOnClickListener {
-            startActivity(Intent(this, SearchUserActivity::class.java))
-        }
-
+        // FIX: listener registrado apenas uma vez (era duplicado)
         binding.mainSearchBtn.setOnClickListener {
             startActivity(Intent(this, SearchUserActivity::class.java))
         }
@@ -68,15 +67,14 @@ class MainActivity : AppCompatActivity() {
             viewModel.updateFcmToken(token)
         }
     }
+
     private fun createNotificationChannel() {
         val channel = android.app.NotificationChannel(
             "easychat_channel",
             "Mensagens",
             android.app.NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Notificações de novas mensagens"
-        }
-        val manager = getSystemService(android.app.NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+        ).apply { description = "Notificações de novas mensagens" }
+        getSystemService(android.app.NotificationManager::class.java)
+            .createNotificationChannel(channel)
     }
 }

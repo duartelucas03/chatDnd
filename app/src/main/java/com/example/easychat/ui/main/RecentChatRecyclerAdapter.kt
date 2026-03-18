@@ -13,30 +13,24 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
 import com.example.easychat.R
-import com.example.easychat.data.repository.UserRepository
-import com.example.easychat.model.ChatroomModel
-import com.example.easychat.model.UserModel
+import com.example.easychat.model.RecentChatUiModel
 import com.example.easychat.ui.chat.ChatActivity
 import com.example.easychat.utils.AndroidUtil
-import com.example.easychat.utils.CryptoManager
-import com.example.easychat.utils.SupabaseClientProvider
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
+/**
+ * Adapter 100% View: recebe [RecentChatUiModel] já prontos do ViewModel.
+ * Sem acesso a repositórios, banco, criptografia ou lógica de negócio.
+ */
 class RecentChatRecyclerAdapter(
-    private val context: Context,
-    private val userRepository: UserRepository = UserRepository()
-) : ListAdapter<ChatroomModel, RecentChatRecyclerAdapter.ChatroomViewHolder>(DIFF) {
+    private val context: Context
+) : ListAdapter<RecentChatUiModel, RecentChatRecyclerAdapter.ChatroomViewHolder>(DIFF) {
 
     companion object {
-        private val DIFF = object : DiffUtil.ItemCallback<ChatroomModel>() {
-            override fun areItemsTheSame(a: ChatroomModel, b: ChatroomModel) = a.id == b.id
-            override fun areContentsTheSame(a: ChatroomModel, b: ChatroomModel) = a == b
+        private val DIFF = object : DiffUtil.ItemCallback<RecentChatUiModel>() {
+            override fun areItemsTheSame(a: RecentChatUiModel, b: RecentChatUiModel) =
+                a.chatroomId == b.chatroomId
+            override fun areContentsTheSame(a: RecentChatUiModel, b: RecentChatUiModel) =
+                a == b
         }
     }
 
@@ -51,91 +45,35 @@ class RecentChatRecyclerAdapter(
     }
 
     inner class ChatroomViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val usernameText: TextView = view.findViewById(R.id.user_name_text)
+        val usernameText: TextView    = view.findViewById(R.id.user_name_text)
         val lastMessageText: TextView = view.findViewById(R.id.last_message_text)
         val lastMessageTime: TextView = view.findViewById(R.id.last_message_time_text)
-        val profilePic: ImageView = view.findViewById(R.id.profile_pic_image_view)
+        val profilePic: ImageView     = view.findViewById(R.id.profile_pic_image_view)
 
-        fun bind(chatroom: ChatroomModel) {
-            // Para grupos, exibe o nome diretamente
-            if (chatroom.isGroup) {
-                usernameText.text = chatroom.name ?: "Grupo"
-                bindLastMessage(chatroom, senderId = chatroom.lastMessageSenderId ?: "")
-                bindTime(chatroom.lastMessageAt)
-                itemView.setOnClickListener { /* TODO: abrir GroupChatActivity */ }
-                return
+        fun bind(item: RecentChatUiModel) {
+            usernameText.text    = item.displayName
+            lastMessageText.text = item.lastMessagePreview
+            lastMessageTime.text = item.lastMessageTime
+
+            if (!item.avatarUrl.isNullOrBlank()) {
+                Glide.with(context)
+                    .load(item.avatarUrl)
+                    .apply(RequestOptions.circleCropTransform())
+                    .into(profilePic)
             }
 
-            // Para chats diretos, busca o outro usuário
-            CoroutineScope(Dispatchers.IO).launch {
-                val memberIds = getMemberIds(chatroom.id)
-                val otherUserId = memberIds.firstOrNull {
-                    it != SupabaseClientProvider.currentUserId()
-                } ?: return@launch
-                val otherUser = userRepository.getUserById(otherUserId) ?: return@launch
-
-                withContext(Dispatchers.Main) {
-                    usernameText.text = otherUser.username
-                    bindLastMessage(chatroom, senderId = chatroom.lastMessageSenderId ?: "")
-                    bindTime(chatroom.lastMessageAt)
-                    loadAvatar(otherUser)
-
-                    itemView.setOnClickListener {
+            itemView.setOnClickListener {
+                when {
+                    item.isGroup -> { /* TODO: abrir GroupChatActivity */ }
+                    item.otherUser != null -> {
                         val intent = Intent(context, ChatActivity::class.java).apply {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         }
-                        AndroidUtil.passUserModelAsIntent(intent, otherUser)
+                        AndroidUtil.passUserModelAsIntent(intent, item.otherUser)
                         context.startActivity(intent)
                     }
                 }
             }
-        }
-
-        private fun bindLastMessage(chatroom: ChatroomModel, senderId: String) {
-            val decrypted = CryptoManager.decrypt(chatroom.lastMessage ?: "")
-            val isMe = senderId == SupabaseClientProvider.currentUserId()
-            lastMessageText.text = when (chatroom.lastMessageType) {
-                "image" -> if (isMe) "Você: 📷 Foto" else "📷 Foto"
-                "audio" -> if (isMe) "Você: 🎵 Áudio" else "🎵 Áudio"
-                "location" -> if (isMe) "Você: 📍 Localização" else "📍 Localização"
-                else -> if (isMe) "Você: $decrypted" else decrypted
-            }
-        }
-
-        private fun bindTime(lastMessageAt: String?) {
-            lastMessageTime.text = try {
-                val instant = Instant.parse(lastMessageAt)
-                val local = instant.atZone(ZoneId.systemDefault())
-                val now = java.time.LocalDate.now(ZoneId.systemDefault())
-                if (local.toLocalDate() == now) {
-                    DateTimeFormatter.ofPattern("HH:mm").format(local)
-                } else {
-                    DateTimeFormatter.ofPattern("dd/MM").format(local)
-                }
-            } catch (e: Exception) {
-                ""
-            }
-        }
-
-        private fun loadAvatar(user: UserModel) {
-            if (!user.avatarUrl.isNullOrBlank()) {
-                Glide.with(context)
-                    .load(user.avatarUrl)
-                    .apply(RequestOptions.circleCropTransform())
-                    .into(profilePic)
-            }
-        }
-    }
-
-    private suspend fun getMemberIds(chatroomId: String): List<String> {
-        return try {
-            val db = SupabaseClientProvider.db
-            db.from("chatroom_members").select {
-                filter { eq("chatroom_id", chatroomId) }
-            }.decodeList<com.example.easychat.model.ChatroomMemberModel>()
-                .map { it.userId }
-        } catch (e: Exception) {
-            emptyList()
         }
     }
 }

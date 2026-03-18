@@ -25,15 +25,18 @@ class ProfileViewModel(
     private val _loading = MutableLiveData<Boolean>(false)
     val loading: LiveData<Boolean> = _loading
 
-    init {
-        loadUser()
-    }
+    // Evento único: sinaliza que o logout foi concluído e a View deve navegar
+    private val _logoutComplete = MutableLiveData<Boolean>(false)
+    val logoutComplete: LiveData<Boolean> = _logoutComplete
+
+    private var pendingAvatarUrl: String? = null
+
+    init { loadUser() }
 
     fun loadUser() {
         _loading.value = true
         viewModelScope.launch {
-            val userModel = userRepository.getCurrentUser()
-            _user.postValue(userModel)
+            _user.postValue(userRepository.getCurrentUser())
             _loading.postValue(false)
         }
     }
@@ -45,28 +48,22 @@ class ProfileViewModel(
     ) {
         val currentUser = _user.value ?: return
         _loading.value = true
-
         viewModelScope.launch {
             try {
-                var avatarUrl = currentUser.avatarUrl
-
-                // Upload de nova foto se selecionada
+                var avatarUrl = pendingAvatarUrl ?: currentUser.avatarUrl
                 if (imageUri != null) {
                     val bytes = contentResolver.openInputStream(imageUri)?.readBytes()
                     if (bytes != null) {
                         avatarUrl = mediaRepository.uploadAvatar(
                             userId = SupabaseClientProvider.currentUserId(),
-                            bytes = bytes
+                            bytes  = bytes
                         )
+                        pendingAvatarUrl = avatarUrl
                     }
                 }
-
-                val updatedUser = currentUser.copy(
-                    username = newUsername,
-                    avatarUrl = avatarUrl
-                )
-                userRepository.saveUser(updatedUser)
-                _user.postValue(updatedUser)
+                val updated = currentUser.copy(username = newUsername, avatarUrl = avatarUrl)
+                userRepository.saveUser(updated)
+                _user.postValue(updated)
                 _updateResult.postValue(true)
             } catch (e: Exception) {
                 _updateResult.postValue(false)
@@ -76,7 +73,23 @@ class ProfileViewModel(
         }
     }
 
-    fun clearUpdateResult() {
-        _updateResult.value = null
+    /**
+     * Lógica de logout pertence ao ViewModel, não à View.
+     * O FCM token é limpo antes de encerrar a sessão no Supabase.
+     */
+    fun logout(onFcmTokenDeleted: (() -> Unit) -> Unit) {
+        onFcmTokenDeleted {
+            viewModelScope.launch {
+                try {
+                    userRepository.updateFcmToken("")   // limpa token no banco
+                    SupabaseClientProvider.auth.signOut()
+                } catch (e: Exception) { /* ignora */ } finally {
+                    _logoutComplete.postValue(true)
+                }
+            }
+        }
     }
+
+    fun clearUpdateResult() { _updateResult.value = null }
+    fun clearLogoutComplete() { _logoutComplete.value = false }
 }

@@ -36,19 +36,15 @@ class LoginUsernameActivity : AppCompatActivity() {
     }
 
     private fun observeViewModel() {
-        viewModel.loading.observe(this) { isLoading -> setInProgress(isLoading) }
-
+        viewModel.loading.observe(this) { setInProgress(it) }
         viewModel.existingUsername.observe(this) { username ->
             if (!username.isNullOrEmpty()) binding.loginUsername.setText(username)
         }
-
         viewModel.saveResult.observe(this) { success ->
             if (success) {
-                startActivity(
-                    Intent(this, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    }
-                )
+                startActivity(Intent(this, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                })
             } else {
                 AndroidUtil.showToast(this, "Erro ao salvar username. Tente novamente.")
             }
@@ -57,6 +53,6 @@ class LoginUsernameActivity : AppCompatActivity() {
 
     private fun setInProgress(inProgress: Boolean) {
         binding.loginProgressBar.visibility = if (inProgress) View.VISIBLE else View.GONE
-        binding.loginLetMeInBtn.visibility = if (inProgress) View.GONE else View.VISIBLE
+        binding.loginLetMeInBtn.visibility  = if (inProgress) View.GONE    else View.VISIBLE
     }
 }

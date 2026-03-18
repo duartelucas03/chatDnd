@@ -5,7 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
+import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.easychat.databinding.FragmentChatBinding
 
@@ -15,12 +15,12 @@ class ChatFragment : Fragment() {
     private val binding get() = _binding!!
 
     private lateinit var adapter: RecentChatRecyclerAdapter
-    private val viewModel: MainViewModel by viewModels()
+
+    // Compartilha a mesma instância do ViewModel da Activity
+    private val viewModel: MainViewModel by activityViewModels()
 
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
         _binding = FragmentChatBinding.inflate(inflater, container, false)
         return binding.root
@@ -34,7 +34,6 @@ class ChatFragment : Fragment() {
 
     private fun setupRecyclerView() {
         adapter = RecentChatRecyclerAdapter(requireContext())
-        // ID no XML está como "recyler_view" (typo original mantido)
         binding.recylerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recylerView.adapter = adapter
     }
@@ -42,6 +41,9 @@ class ChatFragment : Fragment() {
     private fun observeViewModel() {
         viewModel.recentChats.observe(viewLifecycleOwner) { chats ->
             adapter.submitList(chats)
+        }
+        viewModel.loading.observe(viewLifecycleOwner) { isLoading ->
+            // Opcional: exibir ProgressBar no fragment_chat.xml
         }
     }
 
