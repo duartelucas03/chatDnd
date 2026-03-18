@@ -18,6 +18,7 @@ import com.example.easychat.model.ChatroomModel
 import com.example.easychat.model.UserModel
 import com.example.easychat.ui.chat.ChatActivity
 import com.example.easychat.utils.AndroidUtil
+import com.example.easychat.utils.CryptoManager
 import com.example.easychat.utils.SupabaseClientProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -91,12 +92,13 @@ class RecentChatRecyclerAdapter(
         }
 
         private fun bindLastMessage(chatroom: ChatroomModel, senderId: String) {
+            val decrypted = CryptoManager.decrypt(chatroom.lastMessage ?: "")
             val isMe = senderId == SupabaseClientProvider.currentUserId()
             lastMessageText.text = when (chatroom.lastMessageType) {
                 "image" -> if (isMe) "Você: 📷 Foto" else "📷 Foto"
                 "audio" -> if (isMe) "Você: 🎵 Áudio" else "🎵 Áudio"
                 "location" -> if (isMe) "Você: 📍 Localização" else "📍 Localização"
-                else -> if (isMe) "Você: ${chatroom.lastMessage}" else chatroom.lastMessage
+                else -> if (isMe) "Você: $decrypted" else decrypted
             }
         }
 
