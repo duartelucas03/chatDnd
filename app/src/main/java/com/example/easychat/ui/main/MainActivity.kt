@@ -1,120 +1,67 @@
 package com.example.easychat.ui.main
 
 import android.Manifest
-import android.app.Activity
-import android.content.Intent
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.example.easychat.R
-import com.example.easychat.databinding.ActivityMainBinding
-import com.example.easychat.ui.profile.ProfileFragment
-import com.example.easychat.ui.search.SearchUserActivity
+import com.example.easychat.ui.compose.theme.EasyChatTheme
 import com.google.firebase.messaging.FirebaseMessaging
 
-class MainActivity : AppCompatActivity() {
-
-    private lateinit var binding: ActivityMainBinding
+class MainActivity : ComponentActivity() {
 
     val viewModel: MainViewModel by viewModels()
 
-    private val chatFragment    = ChatFragment()
-    private val profileFragment = ProfileFragment()
-
-    // Launcher para pedir permissão de notificação (Android 13+)
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* concedeu ou negou — seguimos normalmente */ }
-
-    // -------------------------------------------------------------------
-    // Launcher de imagem registrado na Activity (não no Fragment) para
-    // evitar IllegalStateException quando o ImagePicker mostra seu diálogo
-    // intermediário e o Fragment passa por mudança de estado do ciclo de vida.
-    // -------------------------------------------------------------------
+    // ─── Launcher de imagem: registrado na Activity para evitar
+    //     IllegalStateException com o ImagePicker (igual ao original) ─────────
     private var onImagePickedCallback: ((Uri) -> Unit)? = null
 
     val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
+        if (result.resultCode == RESULT_OK) {
             val uri = result.data?.data ?: return@registerForActivityResult
             onImagePickedCallback?.invoke(uri)
         }
         onImagePickedCallback = null
     }
 
-    /** Chamado pelo ProfileFragment para iniciar a seleção de imagem. */
-    fun launchImagePicker(intent: Intent, onPicked: (Uri) -> Unit) {
+    fun launchImagePicker(intent: android.content.Intent, onPicked: (Uri) -> Unit) {
         onImagePickedCallback = onPicked
         imagePickerLauncher.launch(intent)
     }
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* aceita ou nega — seguimos normalmente */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
         createNotificationChannel()
         requestNotificationPermissionIfNeeded()
+        refreshFcmToken()
 
-        binding.mainSearchBtn.setOnClickListener {
-            startActivity(Intent(this, SearchUserActivity::class.java))
-        }
-
-        binding.bottomNavigation.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.menu_chat -> {
-                    supportFragmentManager.beginTransaction()
-                        .replace(R.id.main_frame_layout, chatFragment).commit()
-                    true
-                }
-                R.id.menu_profile -> {
-                    supportFragmentManager.beginTransaction()
-                        .replace(R.id.main_frame_layout, profileFragment).commit()
-                    true
-                }
-                else -> false
+        setContent {
+            EasyChatTheme {
+                // MainScreen contém toda a navegação Bottom Nav (Chat + Profile)
+                MainScreen(viewModel = viewModel)
             }
         }
-
-        binding.bottomNavigation.selectedItemId = R.id.menu_chat
-        refreshFcmToken()
     }
 
-    override fun onResume() {
-        super.onResume()
-        // online/offline gerenciado pelo EasyChatApplication via ProcessLifecycleOwner
-    }
-
-    override fun onStop() {
-        super.onStop()
-        // online/offline gerenciado pelo EasyChatApplication via ProcessLifecycleOwner
-    }
-
-    /**
-     * No Android 13 (API 33) e acima, POST_NOTIFICATIONS é uma permissão
-     * "perigosa" que precisa ser solicitada em runtime, igual câmera e localização.
-     * Em versões anteriores a permissão é concedida automaticamente na instalação.
-     */
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            when {
-                // Já tem permissão — não faz nada
-                ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED -> { /* ok */ }
-
-                // Android recomenda mostrar explicação antes de pedir novamente
-                // se o usuário já negou uma vez — aqui usamos o diálogo padrão do sistema,
-                // que é suficiente para a maioria dos apps de chat.
-                else -> notificationPermissionLauncher.launch(
-                    Manifest.permission.POST_NOTIFICATIONS
-                )
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }
@@ -126,12 +73,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun createNotificationChannel() {
-        val channel = android.app.NotificationChannel(
-            "easychat_channel",
-            "Mensagens",
-            android.app.NotificationManager.IMPORTANCE_HIGH
+        val channel = NotificationChannel(
+            "easychat_channel", "Mensagens", NotificationManager.IMPORTANCE_HIGH
         ).apply { description = "Notificações de novas mensagens" }
-        getSystemService(android.app.NotificationManager::class.java)
-            .createNotificationChannel(channel)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 }

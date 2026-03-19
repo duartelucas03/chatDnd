@@ -1,33 +1,37 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ui/auth/LoginUsernameViewModel.kt
+// ─────────────────────────────────────────────────────────────────────────────
 package com.example.easychat.ui.auth
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.easychat.data.repository.UserRepository
 import com.example.easychat.model.UserModel
 import com.example.easychat.utils.SupabaseClientProvider
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class LoginUsernameViewModel(
     private val userRepository: UserRepository = UserRepository()
 ) : ViewModel() {
 
-    private val _loading          = MutableLiveData<Boolean>()
-    val loading: LiveData<Boolean> = _loading
+    private val _loading = MutableStateFlow(false)
+    val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
-    private val _saveResult          = MutableLiveData<Boolean>()
-    val saveResult: LiveData<Boolean> = _saveResult
+    private val _saveResult = MutableStateFlow<Boolean?>(null)
+    val saveResult: StateFlow<Boolean?> = _saveResult.asStateFlow()
 
-    private val _existingUsername          = MutableLiveData<String?>()
-    val existingUsername: LiveData<String?> = _existingUsername
+    private val _existingUsername = MutableStateFlow<String?>(null)
+    val existingUsername: StateFlow<String?> = _existingUsername.asStateFlow()
 
     fun loadExistingUser() {
         _loading.value = true
         viewModelScope.launch {
             val user = userRepository.getCurrentUser()
-            _existingUsername.postValue(user?.username)
-            _loading.postValue(false)
+            _existingUsername.value = user?.username
+            _loading.value = false
         }
     }
 
@@ -40,12 +44,14 @@ class LoginUsernameViewModel(
                 val user = existing?.copy(username = username)
                     ?: UserModel(id = currentId, phone = phone, username = username)
                 userRepository.saveUser(user)
-                _saveResult.postValue(true)
+                _saveResult.value = true
             } catch (e: Exception) {
-                _saveResult.postValue(false)
+                _saveResult.value = false
             } finally {
-                _loading.postValue(false)
+                _loading.value = false
             }
         }
     }
+
+    fun clearSaveResult() { _saveResult.value = null }
 }
