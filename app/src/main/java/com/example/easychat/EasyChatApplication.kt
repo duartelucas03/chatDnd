@@ -14,6 +14,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
+
+/** Claude AI - início
+ * Prompt: Crie a classe Application do meu app de chat. Quando o app abrir, marque o usuário como online no Supabase. Quando fechar, marque como offline. Use o ciclo de vida do processo pra detectar isso.
+ */
+
 class EasyChatApplication : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -25,8 +30,6 @@ class EasyChatApplication : Application() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 appScope.launch {
-                    // Tenta várias vezes — garante que funciona tanto na
-                    // primeira abertura (sessão carregando) quanto nas seguintes
                     repeat(5) { attempt ->
                         if (SupabaseClientProvider.isLoggedIn()) {
                             try { userRepository.updateStatus("online") } catch (e: Exception) { }
@@ -48,3 +51,5 @@ class EasyChatApplication : Application() {
         })
     }
 }
+
+/** Claude AI - final */

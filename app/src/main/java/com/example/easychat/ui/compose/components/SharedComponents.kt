@@ -29,7 +29,7 @@ import com.example.easychat.R
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
-// ─── Avatar circular com fallback de ícone ───────────────────────────────────
+
 
 @Composable
 fun UserAvatar(
@@ -65,7 +65,6 @@ fun UserAvatar(
     }
 }
 
-// ─── Botão primário com estado de loading ────────────────────────────────────
 
 @Composable
 fun PrimaryButton(
@@ -95,7 +94,7 @@ fun PrimaryButton(
     }
 }
 
-// ─── Campo de texto estilizado ───────────────────────────────────────────────
+
 
 @Composable
 fun EasyChatTextField(
@@ -143,7 +142,6 @@ fun EasyChatTextField(
     }
 }
 
-// ─── Indicador de progresso centralizado ────────────────────────────────────
 
 @Composable
 fun FullScreenLoading(modifier: Modifier = Modifier) {
@@ -155,7 +153,7 @@ fun FullScreenLoading(modifier: Modifier = Modifier) {
     }
 }
 
-// ─── Snackbar host padrão ────────────────────────────────────────────────────
+
 
 @Composable
 fun EasyChatSnackbarHost(hostState: SnackbarHostState) {
@@ -167,7 +165,6 @@ fun EasyChatSnackbarHost(hostState: SnackbarHostState) {
     }
 }
 
-// ─── Linha de item de chat recente ───────────────────────────────────────────
 
 @Composable
 fun RecentChatRow(
@@ -217,7 +214,7 @@ fun RecentChatRow(
     }
 }
 
-// ─── Linha de resultado de busca de usuário ──────────────────────────────────
+
 
 @Composable
 fun SearchUserRow(
@@ -257,7 +254,6 @@ fun SearchUserRow(
     }
 }
 
-// ─── Bolha de mensagem ───────────────────────────────────────────────────────
 
 @Composable
 fun MessageBubble(
@@ -314,7 +310,7 @@ fun MessageBubble(
                         text  = statusSymbol,
                         fontSize = 10.sp,
                         color = if (statusSymbol == "✓✓")
-                            Color(0xFF9FFF81)  // verde
+                            Color(0xFF9FFF81)
                         else
                             textColor.copy(alpha = 0.7f)
                     )
@@ -324,7 +320,9 @@ fun MessageBubble(
     }
 }
 
-// ─── Texto com highlight de keyword ─────────────────────────────────────────
+/** Claude AI - início
+ * Prompt: Como implementar um componente de texto que destaca a palavra buscada em amarelo.
+ */
 
 @Composable
 fun HighlightedText(
@@ -365,3 +363,5 @@ fun HighlightedText(
     }
     Text(text = annotated, modifier = modifier, fontSize = 14.sp)
 }
+
+/** Claude AI - final */

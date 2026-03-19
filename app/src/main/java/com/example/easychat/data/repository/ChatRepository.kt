@@ -8,6 +8,10 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.time.Instant
 
+
+/** Claude AI - início
+ * Prompt: Crie o repositório de chat que acessa o Supabase. Ele precisa criar ou buscar conversas entre dois usuários, criar grupos, enviar mensagens de vários tipos (texto, imagem, áudio, localização), marcar como lida, fixar mensagem e listar os chats recentes do usuário.
+ */
 class ChatRepository {
 
     private val db = SupabaseClientProvider.db
@@ -173,3 +177,4 @@ class ChatRepository {
         return messages.filter { it.content?.contains(keyword, ignoreCase = true) == true }
     }
 }
+/** Claude AI - final */

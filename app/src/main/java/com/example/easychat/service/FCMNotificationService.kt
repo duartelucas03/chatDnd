@@ -16,6 +16,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+
+/** Claude AI - início
+ * Prompt: Crie o serviço de notificações push com Firebase. Quando chegar uma mensagem, mostre uma notificação com o conteúdo descriptografado. Para imagem, áudio, vídeo e localização use um texto fixo com emoji. Ao clicar, abra o app direto no chat certo.
+ */
 class FCMNotificationService : FirebaseMessagingService() {
 
     private val userRepository = UserRepository()
@@ -36,10 +40,6 @@ class FCMNotificationService : FirebaseMessagingService() {
             ?: message.notification?.title
             ?: "Nova mensagem"
 
-        // FIX: o corpo da notificação vem do campo "body" do data payload,
-        // que contém o conteúdo cru do banco — potencialmente criptografado.
-        // Tentamos descriptografar; se não for texto criptografado (ex: "📷 Foto"),
-        // o CryptoManager retorna o texto original sem alteração.
         val rawBody = message.data["body"]
             ?: message.notification?.body
             ?: ""
@@ -77,16 +77,6 @@ class FCMNotificationService : FirebaseMessagingService() {
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 
-    /**
-     * Resolve o texto a exibir na notificação de acordo com o tipo da mensagem.
-     *
-     * A Edge Function do Supabase envia no campo "body" o conteúdo cru do banco
-     * (já que ela não tem como saber a chave AES do app). Por isso:
-     * - Para "text": descriptografa com CryptoManager.decrypt(). Se o texto não
-     *   estiver criptografado (mensagem antiga, emoji, etc.), decrypt() retorna
-     *   o valor original sem lançar exceção.
-     * - Para outros tipos: usa um texto amigável fixo, pois não há texto a descriptografar.
-     */
     private fun resolveNotificationBody(
         rawBody: String,
         type: String,
@@ -107,3 +97,4 @@ class FCMNotificationService : FirebaseMessagingService() {
         const val CHANNEL_ID = "easychat_channel"
     }
 }
+/** Claude AI - final */

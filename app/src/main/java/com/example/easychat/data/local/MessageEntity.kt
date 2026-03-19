@@ -3,10 +3,6 @@ package com.example.easychat.data.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-/**
- * Entidade Room para armazenamento local de mensagens.
- * Espelha os campos principais de ChatMessageModel.
- */
 @Entity(tableName = "messages")
 data class MessageEntity(
     @PrimaryKey val id: String,

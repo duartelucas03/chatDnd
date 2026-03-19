@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ui/auth/SplashViewModel.kt
-// ─────────────────────────────────────────────────────────────────────────────
+
 package com.example.easychat.ui.auth
 
 import androidx.lifecycle.ViewModel
@@ -12,6 +10,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+/** Claude AI - início
+ * Prompt: Crie o ViewModel da splash screen. Ele decide pra onde o app vai: se o usuário não está logado vai pro login, se está vai pra tela principal, e se veio de uma notificação vai direto pro chat daquele usuário.
+ */
 
 sealed class SplashDestination {
     object Main                                          : SplashDestination()
@@ -45,3 +47,5 @@ class SplashViewModel(
 
     fun clearDestination() { _destination.value = null }
 }
+
+/** Claude AI - final */

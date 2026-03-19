@@ -1,7 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ui/chat/ChatViewModel.kt — apenas os campos MutableLiveData → MutableStateFlow
-// (toda a lógica de negócio permanece idêntica ao original)
-// ─────────────────────────────────────────────────────────────────────────────
+
 package com.example.easychat.ui.chat
 
 import android.net.Uri
@@ -28,6 +25,10 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
+
+/** Claude AI - início
+ * Prompt: Crie o ViewModel da tela de chat. Ele carrega as mensagens do cache local e do Supabase, escuta novas mensagens em tempo real, descriptografa o conteúdo, e permite enviar texto, imagem, áudio e localização. Também suporta fixar mensagem, filtrar por palavra-chave, marcar como lida e gerenciar membros do grupo.
+ */
 
 class ChatViewModel(
     val otherUser: UserModel,
@@ -404,3 +405,5 @@ class ChatViewModel(
     fun clearError()       { _error.value = null }
     fun clearMessageSent() { _messageSent.value = null }
 }
+
+/** Claude AI - final */

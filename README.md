@@ -1,42 +1,143 @@
-# Firebase Chat App
+# EasyChat
 
-Welcome to the Firebase Chat App repository! This app enables real-time chat functionality using Firebase as the backend. Below is a list of key files and their functionalities:
+Aplicativo de mensagens instantâneas para Android desenvolvido na disciplina **Programação para Dispositivos Móveis** da Universidade Federal de Uberlândia (UFU) — Grupo 9.
 
-## Activity Files
+---
 
-- `ChatActivity.java`: The main activity for individual chat conversations.
-- `LoginOtpActivity.java`: Handles user authentication using OTP.
-- `LoginPhoneNumberActivity.java`: Manages phone number-based user login.
-- `LoginUsernameActivity.java`: Controls user login using a username.
-- `MainActivity.java`: The app's entry point and primary navigation hub.
-- `SearchUserActivity.java`: Allows users to search for other users to initiate chats.
-- `SplashActivity.java`: Displays a splash screen while the app initializes.
+## 👥 Equipe
 
-## Fragment Files
+| Membros |
+|---|---|
+- Artur Batalini Coelho Alvarim 
+- Luiz Alexandre Anchieta Freitas 
+- Lucas Duarte Soares 
+- Vitor Hugo Rocha Curcino 
 
-- `ChatFragment.java`: Manages chat UI and logic within the chat activity.
-- `ProfileFragment.java`: Handles user profile display and editing.
-- `SearchUserFragment.java`: Displays user search results and options for starting a chat.
+---
 
-## Service File
+## 📱 Funcionalidades
 
-- `FCMNotificationService.java`: Integrates Firebase Cloud Messaging for push notifications.
+- **Autenticação** via telefone com OTP (SMS)
+- **Mensagens em tempo real** com sincronização via Supabase Realtime
+- **Status de mensagem**: enviada (✓), entregue e lida (✓✓)
+- **Envio de mídia**: imagens, áudios e vídeos
+- **GPS**: envio de localização atual na conversa
+- **Câmera**: captura e envio de fotos diretamente pelo app
+- **Microfone**: gravação e envio de mensagens de voz
+- **Notificações push** via Firebase Cloud Messaging (FCM)
+- **Grupos**: criação, gerenciamento de membros, adição e remoção
+- **Busca de usuários** por username e importação de contatos do dispositivo
+- **Perfil do usuário**: foto, username e mensagem de status
+- **Mensagens fixadas** no topo do chat (requisito especial)
+- **Filtro de mensagens** por palavra-chave com destaque visual (requisito especial)
+- **Criptografia** de mensagens de texto com AES/CBC
+- **Armazenamento local** com Room para funcionamento offline/cache
+- **Logout** com encerramento seguro de sessão
 
-Feel free to explore these files to understand the structure of the app and how different components interact. The app leverages Firebase Authentication, Realtime Database, and Firebase Cloud Messaging to provide seamless chat functionality.
+---
 
-## Getting Started
+## 🏗️ Arquitetura
 
-To use this app:
+O projeto adota **MVVM (Model-View-ViewModel)** com fluxo de estado unidirecional:
 
-1. Clone or download the repository.
-2. Set up your Firebase project and update the `google-services.json` file.
-3. Build and run the app on your Android device or emulator.
+```
+UI (Compose Screens)
+    ↕ StateFlow / collectAsStateWithLifecycle
+ViewModels
+    ↕
+Repositories (ChatRepository, UserRepository, MediaRepository)
+    ↕                          ↕
+Supabase (remoto)         Room / LocalMessageRepository (local)
+```
 
-## Notes
 
-- This repository provides a basic structure for a Firebase-based chat app. You can extend and customize it as per your requirements.
-- Make sure to handle security and privacy aspects when implementing user authentication and chat features.
 
-For more details about Firebase services and Android app development, refer to the official [Firebase Documentation](https://firebase.google.com/docs) and [Android Documentation](https://developer.android.com/docs).
+## 🛠️ Tecnologias e Bibliotecas
 
-Happy coding!
+| Tecnologia | Uso |
+|---|---|
+| **Supabase** (Postgrest, Auth, Realtime, Storage) | Backend: banco PostgreSQL, autenticação OTP, mensagens em tempo real, armazenamento de mídia |
+| **Firebase Cloud Messaging (FCM)** | Notificações push |
+| **Jetpack Compose + Material 3** | Interface declarativa |
+| **Room (SQLite)** | Cache local de mensagens |
+| **Google Play Services Location** | Obtenção de coordenadas GPS |
+| **Android MediaRecorder** | Gravação de áudio (MPEG-4/AAC) |
+| **ImagePicker (Dhaval2404)** | Seleção e captura de imagens |
+| **Coil Compose** | Carregamento assíncrono de imagens |
+| **Country Code Picker (CCP)** | Seletor de código de país no login |
+| **CryptoManager (AES/CBC)** | Criptografia simétrica de mensagens de texto |
+
+---
+
+## ⚙️ Configuração e Execução
+
+### Pré-requisitos
+
+- Android Studio Hedgehog ou superior
+- Android SDK 26+
+- Conta no Supabase e projeto configurado
+- Projeto Firebase com FCM habilitado
+
+### Passos
+
+1. Clone o repositório:
+```bash
+git clone https://github.com/duartelucas03/chatDnd.git
+cd chatDnd
+```
+
+2. Adicione o arquivo `google-services.json` do seu projeto Firebase em:
+```
+app/google-services.json
+```
+
+3. Configure as credenciais do Supabase em `SupabaseClientProvider.kt`:
+```kotlin
+val client: SupabaseClient = createSupabaseClient(
+    supabaseUrl = "SUA_URL_SUPABASE",
+    supabaseKey = "SUA_CHAVE_SUPABASE"
+)
+```
+
+4. Abra o projeto no Android Studio, sincronize o Gradle e execute no dispositivo ou emulador.
+
+---
+
+## 🧪 Como Testar
+
+> ⚠️ **Atenção:** O provedor de SMS utilizado (Vonage) não envia OTP para números brasileiros. Para testar, utilize os números previamente cadastrados no Supabase com OTP fixo.
+
+### Credenciais de teste
+
+| Número | OTP |
+|---|---|
+| +55 34 99999-9999 | 123456 |
+
+**Passos:**
+1. Abra o app
+2. Informe o número `+55 34 99999-9999` na tela de login
+3. Na tela de OTP, informe `123456`
+4. Defina um username e acesse o app
+
+---
+
+## 📂 Estrutura do Banco de Dados (Supabase)
+
+### Tabelas principais
+
+- **users** — id, username, phone, fcm_token, status, status_message, avatar_url, last_seen
+- **chatrooms** — id, is_group, name, avatar_url, last_message, last_message_at, last_message_type, created_by
+- **chatroom_members** — chatroom_id, user_id, role, last_read_at, joined_at
+- **messages** — id, chatroom_id, sender_id, content, type, media_url, location_lat, location_lng, is_pinned, status, local_id, is_synced, created_at
+
+### Buckets de Storage
+
+- **avatars** — fotos de perfil dos usuários
+- **chat-media** — imagens e vídeos enviados no chat
+- **audio-messages** — mensagens de voz
+
+---
+
+## 🔐 Segurança
+
+As mensagens de texto são criptografadas com **AES/CBC/PKCS5Padding** antes de serem gravadas no banco. A descriptografia ocorre localmente no dispositivo no momento da exibição. Mensagens de mídia (imagem, áudio, vídeo) e localização não são criptografadas — apenas a URL de referência é armazenada.

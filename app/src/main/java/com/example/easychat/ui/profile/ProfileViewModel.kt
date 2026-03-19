@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ui/profile/ProfileViewModel.kt
-// ─────────────────────────────────────────────────────────────────────────────
+
 package com.example.easychat.ui.profile
 
 import android.net.Uri
@@ -19,6 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+
+
 class ProfileViewModel(
     private val userRepository: UserRepository = UserRepository(),
     private val mediaRepository: MediaRepository = MediaRepository()
@@ -34,6 +34,10 @@ class ProfileViewModel(
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
     private var pendingAvatarUrl: String? = null
+
+    /** Claude AI - início
+     * Prompt: Crie o ViewModel da tela de perfil. O usuário pode editar o nome, mensagem de status e foto. A foto é enviada pro Supabase Storage. Também tem a função de logout que limpa o token FCM e encerra a sessão com segurança.
+     */
 
     init { loadUser() }
 
@@ -100,3 +104,5 @@ class ProfileViewModel(
 
     fun clearUpdateResult() { _updateResult.value = null }
 }
+
+/** Claude AI - final */

@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ui/auth/LoginUsernameViewModel.kt
-// ─────────────────────────────────────────────────────────────────────────────
+
 package com.example.easychat.ui.auth
 
 import androidx.lifecycle.ViewModel
@@ -13,6 +11,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+
+/** Claude AI - início
+ * Prompt: Crie o ViewModel da tela onde o usuário escolhe seu nome de usuário após o login. Ele carrega o nome atual se já existir, e salva o novo nome no Supabase quando o usuário confirmar.
+ */
 class LoginUsernameViewModel(
     private val userRepository: UserRepository = UserRepository()
 ) : ViewModel() {
@@ -55,3 +57,5 @@ class LoginUsernameViewModel(
 
     fun clearSaveResult() { _saveResult.value = null }
 }
+
+/** Claude AI - final */

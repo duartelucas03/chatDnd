@@ -3,6 +3,10 @@ package com.example.easychat.data.repository
 import com.example.easychat.model.UserModel
 import com.example.easychat.utils.SupabaseClientProvider
 
+
+/** Claude AI - início
+ * Prompt: Crie o repositório de usuários que acessa o Supabase. Precisa buscar o usuário atual, salvar, atualizar status online/offline, atualizar token do FCM, buscar usuários por nome, por id e por número de telefone.
+ */
 class UserRepository {
 
     private val db = SupabaseClientProvider.db
@@ -56,7 +60,6 @@ class UserRepository {
         } catch (e: Exception) { emptyList() }
     }
 
-    /** Cruza lista de números de telefone com usuários cadastrados */
     suspend fun getUsersByPhones(phones: List<String>): List<UserModel> {
         if (phones.isEmpty()) return emptyList()
         return try {
@@ -66,3 +69,5 @@ class UserRepository {
         } catch (e: Exception) { emptyList() }
     }
 }
+
+/** Claude AI - final */

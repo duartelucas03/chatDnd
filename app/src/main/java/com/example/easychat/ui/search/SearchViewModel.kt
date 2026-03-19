@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ui/search/SearchViewModel.kt
-// ─────────────────────────────────────────────────────────────────────────────
+
 package com.example.easychat.ui.search
 
 import androidx.lifecycle.ViewModel
@@ -32,6 +30,10 @@ class SearchViewModel(
     private val _error        = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+
+    /** Claude AI - início
+     * Prompt: Crie o ViewModel da tela de busca de usuários. Ele busca usuários pelo nome digitado, também aceita uma lista de telefones pra importar contatos, e permite criar um grupo com os usuários selecionados.
+     */
     fun searchUsers(term: String) {
         if (term.length < 3) return
         _loading.value = true
@@ -77,3 +79,5 @@ class SearchViewModel(
     fun clearGroupCreated() { _groupCreated.value = null }
     fun clearError()        { _error.value = null }
 }
+
+/** Claude AI - final */

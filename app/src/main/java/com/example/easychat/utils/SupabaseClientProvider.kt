@@ -11,6 +11,10 @@ import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
 
+/** Claude AI - início
+ * Prompt: Crie o singleton que inicializa e fornece o cliente do Supabase pro app, com os módulos de autenticação, banco de dados, realtime e storage configurados. Também adicione helpers pra pegar o id do usuário logado e verificar se está logado.
+ */
+
 object SupabaseClientProvider {
 
     val client: SupabaseClient = createSupabaseClient(
@@ -34,3 +38,5 @@ object SupabaseClientProvider {
     fun currentUserId(): String = auth.currentUserOrNull()?.id ?: ""
     fun isLoggedIn(): Boolean   = currentUserId().isNotEmpty()
 }
+
+/** Claude AI - final */

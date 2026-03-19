@@ -4,6 +4,10 @@ import com.example.easychat.utils.SupabaseClientProvider
 import io.github.jan.supabase.storage.upload
 import java.util.UUID
 
+
+/** Claude AI - início
+ * Prompt: Crie um repositório pra fazer upload de arquivos no Supabase Storage. Preciso fazer upload de foto de perfil, imagem de chat, áudio e vídeo, cada um indo pro bucket correto e retornando a URL pública.
+ */
 class MediaRepository {
 
     private val storage = SupabaseClientProvider.storage
@@ -34,3 +38,4 @@ class MediaRepository {
         return storage.from("chat-media").publicUrl(path)
     }
 }
+/** Claude AI - final */

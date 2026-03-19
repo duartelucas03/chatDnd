@@ -13,7 +13,6 @@ data class ChatMessageUiModel(
     val statusSymbol: String,
     val showStatus: Boolean,
     val isPinned: Boolean,
-    // FIX: keyword faz parte do modelo — DiffUtil detecta mudança e força redesenho
     val highlightKeyword: String = "",
     val source: ChatMessageModel
 )

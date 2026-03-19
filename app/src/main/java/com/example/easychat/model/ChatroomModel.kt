@@ -5,6 +5,10 @@ import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+
+/** Claude AI - início
+ * Prompt: Crie os modelos de dados do app de chat. Preciso de: usuário, sala de chat, membro de sala, mensagem com suporte a texto/imagem/áudio/localização, um modelo de mensagem formatado pra UI, e um modelo de preview de chat recente pra lista principal.
+ */
 @Parcelize
 @Serializable
 data class ChatroomModel(
@@ -19,3 +23,4 @@ data class ChatroomModel(
     @SerialName("created_by")             val createdBy: String? = null,
     @SerialName("created_at")             val createdAt: String = ""
 ) : Parcelable
+/** Claude AI - final */

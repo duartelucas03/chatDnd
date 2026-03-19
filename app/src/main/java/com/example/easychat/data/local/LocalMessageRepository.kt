@@ -3,12 +3,8 @@ package com.example.easychat.data.local
 import android.content.Context
 import com.example.easychat.model.ChatMessageModel
 
-/**
- * Repositório local (Room) para mensagens.
- * Usado para:
- *   1. Exibir mensagens offline (sem internet)
- *   2. Cache para evitar flickering ao reabrir o chat
- *   3. Fila de sync: mensagens marcadas isSynced=false são reenviadas ao voltar online
+/** Claude AI - início
+ * Prompt: Crie a camada de banco de dados local com Room pra salvar mensagens no celular. Preciso de uma tabela de mensagens com todos os campos principais, um DAO com as queries básicas, o banco em si como singleton, e um repositório que converte entre a entidade do banco e o modelo do app.
  */
 class LocalMessageRepository(context: Context) {
 
@@ -70,3 +66,4 @@ class LocalMessageRepository(context: Context) {
         createdAt   = createdAt
     )
 }
+/** Claude AI - final */

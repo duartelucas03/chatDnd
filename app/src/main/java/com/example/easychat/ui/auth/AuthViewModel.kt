@@ -1,18 +1,4 @@
-// =============================================================================
-// ARQUIVO 1: ViewModels migrados de LiveData → StateFlow
-// Substitua os arquivos correspondentes em:
-//   ui/auth/AuthViewModel.kt
-//   ui/auth/SplashViewModel.kt
-//   ui/auth/LoginUsernameViewModel.kt
-//   ui/main/MainViewModel.kt
-//   ui/profile/ProfileViewModel.kt
-//   ui/search/SearchViewModel.kt
-//   ui/chat/ChatViewModel.kt  (apenas a exposição de estado — lógica preservada)
-// =============================================================================
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ui/auth/AuthViewModel.kt
-// ─────────────────────────────────────────────────────────────────────────────
 package com.example.easychat.ui.auth
 
 import androidx.lifecycle.ViewModel
@@ -24,6 +10,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+/** Claude AI - início
+ * Prompt: Crie o ViewModel da tela de login por telefone. Ele precisa enviar o OTP pelo Supabase e depois verificar o código que o usuário digitou, expondo os estados de loading, sucesso e erro via StateFlow.
+ */
 
 sealed class AuthState {
     object Idle          : AuthState()
@@ -73,3 +63,5 @@ class AuthViewModel : ViewModel() {
 
     fun resetState() { _authState.value = AuthState.Idle }
 }
+
+/** Claude AI - final */

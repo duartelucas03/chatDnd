@@ -5,6 +5,10 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
+
+/** Claude AI - início
+ * Prompt: Crie um utilitário de criptografia pra criptografar e descriptografar as mensagens do chat usando AES. Se der erro na descriptografia, retorna o texto original sem quebrar o app.
+ */
 object CryptoManager {
 
     private const val SECRET_KEY = "EasyChat2026SecretKey!@#$%^&*()"
@@ -35,3 +39,6 @@ object CryptoManager {
         } catch (e: Exception) { cipherText }
     }
 }
+
+
+/** Claude AI - final */

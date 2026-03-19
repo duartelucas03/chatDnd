@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ui/main/MainViewModel.kt
-// ─────────────────────────────────────────────────────────────────────────────
+
 package com.example.easychat.ui.main
 
 import androidx.lifecycle.ViewModel
@@ -27,6 +25,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+/** Claude AI - início
+ * Prompt: Crie o ViewModel da tela principal com a lista de conversas. Ele busca os chats recentes, monta o preview de cada um com nome, foto e última mensagem descriptografada, e atualiza a lista automaticamente quando chegar nova mensagem via Realtime do Supabase.
+ */
 
 class MainViewModel(
     private val chatRepository: ChatRepository = ChatRepository(),
@@ -153,3 +155,5 @@ class MainViewModel(
     fun setUserOnline()  { viewModelScope.launch { try { userRepository.updateStatus("online")  } catch (e: Exception) { } } }
     fun setUserOffline() { viewModelScope.launch { try { userRepository.updateStatus("offline") } catch (e: Exception) { } } }
 }
+
+/** Claude AI - final */
