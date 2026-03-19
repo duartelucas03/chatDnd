@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 class EasyChatApplication : Application() {
 
@@ -22,24 +24,27 @@ class EasyChatApplication : Application() {
 
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
-                setStatus("online", delayMs = 1500)
+                appScope.launch {
+                    // Tenta várias vezes — garante que funciona tanto na
+                    // primeira abertura (sessão carregando) quanto nas seguintes
+                    repeat(5) { attempt ->
+                        if (SupabaseClientProvider.isLoggedIn()) {
+                            try { userRepository.updateStatus("online") } catch (e: Exception) { }
+                            return@launch
+                        }
+                        delay(800L * (attempt + 1)) // 800ms, 1600ms, 2400ms...
+                    }
+                }
             }
+
             override fun onStop(owner: LifecycleOwner) {
-                setStatus("offline", delayMs = 0)
+                if (!SupabaseClientProvider.isLoggedIn()) return
+                runBlocking {
+                    try {
+                        withTimeout(3000) { userRepository.updateStatus("offline") }
+                    } catch (e: Exception) { }
+                }
             }
         })
-    }
-
-    private fun setStatus(status: String, delayMs: Long = 0) {
-        appScope.launch {
-            try {
-                if (delayMs > 0) delay(delayMs)
-                // Após o delay, o Auth já carregou a sessão do storage
-                if (!SupabaseClientProvider.isLoggedIn()) return@launch
-                userRepository.updateStatus(status)
-            } catch (e: Exception) {
-                // Silencioso — falha de rede não deve impactar o app
-            }
-        }
     }
 }

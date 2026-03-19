@@ -243,11 +243,13 @@ class ChatViewModel(
                     .channel("user_status_${otherUser.id}")
                 userStatusChannel = channel
 
+                // Correção: Removendo o bloco filter problemático
                 channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
                     table = "users"
                 }.onEach { change ->
                     val updated = change.decodeRecord<UserModel>()
-                    // Filtra client-side — só atualiza se for o outro usuário desta conversa
+                    // Verificamos manualmente se o ID é o que queremos
+                    // para evitar problemas de compatibilidade com a DSL de filtro
                     if (updated.id == otherUser.id) {
                         _otherUserLive.postValue(updated)
                     }
