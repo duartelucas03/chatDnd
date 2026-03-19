@@ -42,6 +42,16 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { /* aceita ou nega — seguimos normalmente */ }
 
+    override fun onResume() {
+        super.onResume()
+        viewModel.setUserOnline()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        viewModel.setUserOffline()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
