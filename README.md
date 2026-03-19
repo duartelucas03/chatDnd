@@ -141,3 +141,16 @@ val client: SupabaseClient = createSupabaseClient(
 ## 🔐 Segurança
 
 As mensagens de texto são criptografadas com **AES/CBC/PKCS5Padding** antes de serem gravadas no banco. A descriptografia ocorre localmente no dispositivo no momento da exibição. Mensagens de mídia (imagem, áudio, vídeo) e localização não são criptografadas — apenas a URL de referência é armazenada.
+
+
+---
+
+## APK
+
+O apk está no caminho: 
+
+```
+app/release
+```
+
+---
