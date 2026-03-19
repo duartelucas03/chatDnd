@@ -39,11 +39,16 @@ import com.example.easychat.ui.compose.components.MessageBubble
 import com.example.easychat.ui.compose.components.UserAvatar
 import com.github.dhaval2404.imagepicker.ImagePicker
 import com.google.android.gms.location.LocationServices
-import java.io.File
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(
@@ -60,14 +65,14 @@ fun ChatScreen(
     val error            by viewModel.error.collectAsStateWithLifecycle()
     val groupMembers     by viewModel.groupMembers.collectAsStateWithLifecycle()
 
-    var inputText         by remember { mutableStateOf("") }
-    var showSearch        by remember { mutableStateOf(false) }
-    var searchKeyword     by remember { mutableStateOf("") }
-    var isRecording       by remember { mutableStateOf(false) }
-    var audioPath         by remember { mutableStateOf("") }
-    var mediaRecorder     by remember { mutableStateOf<MediaRecorder?>(null) }
-    var showPinDialog     by remember { mutableStateOf<ChatMessageUiModel?>(null) }
-    var showGroupDialog   by remember { mutableStateOf(false) }
+    var inputText           by remember { mutableStateOf("") }
+    var showSearch          by remember { mutableStateOf(false) }
+    var searchKeyword       by remember { mutableStateOf("") }
+    var isRecording         by remember { mutableStateOf(false) }
+    var audioPath           by remember { mutableStateOf("") }
+    var mediaRecorder       by remember { mutableStateOf<MediaRecorder?>(null) }
+    var showPinDialog       by remember { mutableStateOf<ChatMessageUiModel?>(null) }
+    var showGroupDialog     by remember { mutableStateOf(false) }
     var showAddMemberDialog by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
@@ -80,6 +85,26 @@ fun ChatScreen(
             val uri: Uri = result.data?.data ?: return@rememberLauncherForActivityResult
             viewModel.sendImageMessage(uri, context.contentResolver)
         }
+    }
+
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val uri: Uri = result.data?.data ?: return@rememberLauncherForActivityResult
+            viewModel.sendVideoMessage(uri, context.contentResolver)
+        }
+    }
+
+    val videoPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val intent = android.content.Intent(android.content.Intent.ACTION_PICK).apply {
+                type = "video/*"
+            }
+            videoPickerLauncher.launch(intent)
+        } else android.widget.Toast.makeText(context, "Permissão negada para acessar vídeos", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     val locationPermLauncher = rememberLauncherForActivityResult(
@@ -114,7 +139,6 @@ fun ChatScreen(
         viewModel.clearError()
     }
 
-    // Scroll automático ao receber nova mensagem (lista invertida, idx = 0)
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(0)
     }
@@ -122,7 +146,7 @@ fun ChatScreen(
     // ─── Dialogs ────────────────────────────────────────────────────────────
     showPinDialog?.let { msg ->
         PinDialog(
-            isPinned = msg.isPinned,
+            isPinned  = msg.isPinned,
             onConfirm = { viewModel.togglePin(msg); showPinDialog = null },
             onDismiss = { showPinDialog = null }
         )
@@ -130,11 +154,11 @@ fun ChatScreen(
 
     if (showGroupDialog) {
         GroupMembersDialog(
-            members    = groupMembers,
-            onAdd      = { showAddMemberDialog = true; showGroupDialog = false },
-            onRemove   = { userId -> viewModel.removeGroupMember(userId) },
-            onLeave    = { viewModel.removeGroupMember(com.example.easychat.utils.SupabaseClientProvider.currentUserId()); onBack() },
-            onDismiss  = { showGroupDialog = false }
+            members   = groupMembers,
+            onAdd     = { showAddMemberDialog = true; showGroupDialog = false },
+            onRemove  = { userId -> viewModel.removeGroupMember(userId) },
+            onLeave   = { viewModel.removeGroupMember(com.example.easychat.utils.SupabaseClientProvider.currentUserId()); onBack() },
+            onDismiss = { showGroupDialog = false }
         )
     }
 
@@ -150,10 +174,10 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             ChatTopBar(
-                otherUser  = otherUserLive,
-                isGroup    = chatroomId != null,
-                onBack     = onBack,
-                onSearch   = { showSearch = !showSearch; if (!showSearch) { searchKeyword = ""; viewModel.filterMessages("") } },
+                otherUser     = otherUserLive,
+                isGroup       = chatroomId != null,
+                onBack        = onBack,
+                onSearch      = { showSearch = !showSearch; if (!showSearch) { searchKeyword = ""; viewModel.filterMessages("") } },
                 onManageGroup = { viewModel.loadGroupMembers(); showGroupDialog = true }
             )
         }
@@ -164,12 +188,12 @@ fun ChatScreen(
                 .fillMaxSize()
                 .imePadding()
         ) {
-            // ── Mensagem fixada ──────────────────────────────────────────────
             pinnedMessage?.let { pinned ->
                 PinnedMessageBanner(
                     text    = when (pinned.type) {
                         "image"    -> "📷 Foto"
                         "audio"    -> "🎵 Áudio"
+                        "video"    -> "🎬 Vídeo"
                         "location" -> "📍 Localização"
                         else       -> pinned.text ?: ""
                     },
@@ -177,7 +201,6 @@ fun ChatScreen(
                 )
             }
 
-            // ── Barra de busca (toggle) ───────────────────────────────────────
             if (showSearch) {
                 OutlinedTextField(
                     value         = searchKeyword,
@@ -191,35 +214,27 @@ fun ChatScreen(
                 )
             }
 
-            // ── Upload progressbar ───────────────────────────────────────────
             if (isUploading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
-            // ── Lista de mensagens ───────────────────────────────────────────
             LazyColumn(
-                modifier      = Modifier.weight(1f).fillMaxWidth(),
-                state         = listState,
-                reverseLayout = true,   // mesmo comportamento do RecyclerView original
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                modifier           = Modifier.weight(1f).fillMaxWidth(),
+                state              = listState,
+                reverseLayout      = true,
+                contentPadding     = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(items = messages, key = { it.id }) { msg ->
-                    MessageRow(
-                        msg         = msg,
-                        onLongClick = { showPinDialog = msg }
-                    )
+                    MessageRow(msg = msg, onLongClick = { showPinDialog = msg })
                 }
             }
 
-            // ── Barra de input ───────────────────────────────────────────────
             InputBar(
-                text      = inputText,
-                onTextChange = { inputText = it },
-                isRecording  = isRecording,
-                onSend = {
-                    if (inputText.trim().isNotEmpty()) viewModel.sendTextMessage(inputText.trim())
-                },
+                text          = inputText,
+                onTextChange  = { inputText = it },
+                isRecording   = isRecording,
+                onSend        = { if (inputText.trim().isNotEmpty()) viewModel.sendTextMessage(inputText.trim()) },
                 onAttachImage = {
                     val perm = if (android.os.Build.VERSION.SDK_INT >= 33)
                         Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
@@ -228,29 +243,33 @@ fun ChatScreen(
                             .cropSquare().compress(1024).maxResultSize(1080, 1080)
                             .createIntent { imagePickerLauncher.launch(it) }
                     } else {
-                        (context as? androidx.activity.ComponentActivity)
-                            ?.requestPermissions(arrayOf(perm), 100)
+                        (context as? androidx.activity.ComponentActivity)?.requestPermissions(arrayOf(perm), 100)
+                    }
+                },
+                onAttachVideo = {
+                    val perm = if (android.os.Build.VERSION.SDK_INT >= 33)
+                        Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
+                    if (ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED) {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_PICK).apply { type = "video/*" }
+                        videoPickerLauncher.launch(intent)
+                    } else {
+                        videoPermLauncher.launch(perm)
                     }
                 },
                 onRecordAudio = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-                        == PackageManager.PERMISSION_GRANTED
-                    ) {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         val result = toggleRecording(context, isRecording, mediaRecorder, audioPath)
                         isRecording   = result.isRecording
                         audioPath     = result.audioPath
                         mediaRecorder = result.recorder
-                        if (!result.isRecording && result.audioPath.isNotBlank()) {
-                            viewModel.sendAudioMessage(result.audioPath)
-                        }
+                        if (!result.isRecording && result.audioPath.isNotBlank()) viewModel.sendAudioMessage(result.audioPath)
                     } else {
                         audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
                 onSendLocation = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
-                        == PackageManager.PERMISSION_GRANTED
-                    ) sendLocation(context, viewModel)
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+                        sendLocation(context, viewModel)
                     else locationPermLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                 }
             )
@@ -259,7 +278,7 @@ fun ChatScreen(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub-composables locais
+// Sub-composables
 // ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -280,9 +299,8 @@ private fun ChatTopBar(
                     Text(otherUser.username, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                     if (!isGroup) {
                         val statusText = buildStatusText(otherUser)
-                        if (statusText.isNotBlank()) {
+                        if (statusText.isNotBlank())
                             Text(statusText, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                     }
                 }
             }
@@ -326,10 +344,7 @@ private fun formatLastSeen(lastSeen: String): String = try {
 
 @Composable
 private fun PinnedMessageBanner(text: String, onClose: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -338,11 +353,11 @@ private fun PinnedMessageBanner(text: String, onClose: () -> Unit) {
                 modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(8.dp))
             Text(
-                text  = text.ifBlank { "[Mensagem]" },
+                text     = text.ifBlank { "[Mensagem]" },
                 modifier = Modifier.weight(1f),
                 fontSize = 13.sp,
                 maxLines = 1,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color    = MaterialTheme.colorScheme.onPrimaryContainer
             )
             IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
                 Icon(painterResource(R.drawable.ic_close), contentDescription = "Desafixar",
@@ -365,10 +380,11 @@ private fun MessageRow(msg: ChatMessageUiModel, onLongClick: () -> Unit) {
                 .combinedClickable(onLongClick = onLongClick, onClick = {})
         ) {
             when (msg.type) {
-                "image" -> ImageMessage(msg)
-                "audio" -> AudioMessage(msg)
+                "image"    -> ImageMessage(msg)
+                "audio"    -> AudioMessage(msg)
+                "video"    -> VideoMessage(msg)
                 "location" -> LocationMessage(msg)
-                else -> MessageBubble(
+                else       -> MessageBubble(
                     text             = msg.text,
                     timeFormatted    = msg.timeFormatted,
                     statusSymbol     = msg.statusSymbol,
@@ -391,19 +407,14 @@ private fun ImageMessage(msg: ChatMessageUiModel) {
     ) {
         if (!msg.mediaUrl.isNullOrBlank()) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(msg.mediaUrl).crossfade(true).build(),
+                model            = ImageRequest.Builder(LocalContext.current).data(msg.mediaUrl).crossfade(true).build(),
                 contentDescription = "Imagem",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                contentScale     = ContentScale.Crop,
+                modifier         = Modifier.fillMaxSize()
             )
         }
-        Text(
-            text = msg.timeFormatted,
-            fontSize = 10.sp,
-            color = Color.White,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp)
-        )
+        Text(text = msg.timeFormatted, fontSize = 10.sp, color = Color.White,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp))
     }
 }
 
@@ -431,19 +442,16 @@ private fun AudioMessage(msg: ChatMessageUiModel) {
                 }
             }) {
                 Icon(
-                    painter = painterResource(if (isPlaying) R.drawable.ic_stop else R.drawable.ic_play),
+                    painter           = painterResource(if (isPlaying) R.drawable.ic_stop else R.drawable.ic_play),
                     contentDescription = if (isPlaying) "Parar" else "Reproduzir",
-                    tint = if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    tint              = if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Text("🎵 Áudio", fontSize = 13.sp,
-                color = if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSurfaceVariant)
+                color = if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(8.dp))
             Text(msg.timeFormatted, fontSize = 10.sp,
-                color = (if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.7f))
+                color = (if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.7f))
         }
     }
 }
@@ -460,15 +468,52 @@ private fun LocationMessage(msg: ChatMessageUiModel) {
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(locText, fontSize = 13.sp,
-                color = if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSurfaceVariant)
+                color = if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
             Text(msg.timeFormatted, fontSize = 10.sp,
-                color = (if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.7f),
+                color = (if (msg.isFromMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.7f),
                 modifier = Modifier.align(Alignment.End))
         }
     }
 }
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun VideoMessage(msg: ChatMessageUiModel) {
+    val context = LocalContext.current
+    Box(
+        modifier = Modifier
+            .size(200.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF1A1A2E))
+            .combinedClickable(
+                onClick = {
+                    if (!msg.mediaUrl.isNullOrBlank()) {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            setDataAndType(android.net.Uri.parse(msg.mediaUrl), "video/*")
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(intent)
+                    }
+                },
+                onLongClick = {}
+            )
+    ) {
+        Icon(
+            painter            = rememberVectorPainter(Icons.Default.Videocam),
+            contentDescription = "Reproduzir vídeo",
+            tint               = Color.White.copy(alpha = 0.9f),
+            modifier           = Modifier.size(48.dp).align(Alignment.Center)
+        )
+        Text(text = "🎬 Vídeo", fontSize = 12.sp, color = Color.White,
+            modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+        Text(text = msg.timeFormatted, fontSize = 10.sp, color = Color.White,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// InputBar com menu de clipe expansível
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun InputBar(
@@ -477,71 +522,134 @@ private fun InputBar(
     isRecording: Boolean,
     onSend: () -> Unit,
     onAttachImage: () -> Unit,
+    onAttachVideo: () -> Unit,
     onRecordAudio: () -> Unit,
     onSendLocation: () -> Unit
 ) {
+    var showMediaMenu by remember { mutableStateOf(false) }
+
     Surface(shadowElevation = 4.dp) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onAttachImage) {
-                Icon(painterResource(R.drawable.ic_image), contentDescription = "Imagem")
+        Column {
+            // ── Menu de mídia expansível ─────────────────────────────────────
+            if (showMediaMenu) {
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MediaMenuButton(
+                            icon  = { Icon(painterResource(R.drawable.ic_image), contentDescription = null, tint = Color.White) },
+                            label = "Foto",
+                            color = MaterialTheme.colorScheme.primary
+                        ) { showMediaMenu = false; onAttachImage() }
+
+                        MediaMenuButton(
+                            icon  = { Icon(rememberVectorPainter(Icons.Default.Videocam), contentDescription = null, tint = Color.White) },
+                            label = "Vídeo",
+                            color = MaterialTheme.colorScheme.tertiary
+                        ) { showMediaMenu = false; onAttachVideo() }
+
+                        MediaMenuButton(
+                            icon  = { Icon(painterResource(R.drawable.ic_mic), contentDescription = null, tint = Color.White) },
+                            label = if (isRecording) "Parar" else "Áudio",
+                            color = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+                        ) { showMediaMenu = false; onRecordAudio() }
+
+                        MediaMenuButton(
+                            icon  = { Icon(painterResource(R.drawable.ic_location), contentDescription = null, tint = Color.White) },
+                            label = "Local",
+                            color = Color(0xFF4CAF50)
+                        ) { showMediaMenu = false; onSendLocation() }
+                    }
+                }
             }
-            IconButton(onClick = onRecordAudio) {
-                Icon(
-                    painter = painterResource(if (isRecording) R.drawable.ic_stop else R.drawable.ic_mic),
-                    contentDescription = if (isRecording) "Parar gravação" else "Gravar áudio",
-                    tint = if (isRecording) MaterialTheme.colorScheme.error else LocalContentColor.current
-                )
-            }
-            IconButton(onClick = onSendLocation) {
-                Icon(painterResource(R.drawable.ic_location), contentDescription = "Localização")
-            }
-            OutlinedTextField(
-                value = text,
-                onValueChange = onTextChange,
-                placeholder = { Text("Mensagem") },
-                modifier = Modifier.weight(1f),
-                singleLine = false,
-                maxLines = 4,
-                shape = RoundedCornerShape(20.dp)
-            )
-            Spacer(Modifier.width(4.dp))
-            IconButton(
-                onClick = onSend,
-                enabled = text.trim().isNotEmpty(),
+
+            // ── Linha principal ──────────────────────────────────────────────
+            Row(
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(
-                        if (text.trim().isNotEmpty()) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    painterResource(R.drawable.icon_send),
-                    contentDescription = "Enviar",
-                    tint = if (text.trim().isNotEmpty()) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                // Botão de clipe (abre/fecha menu)
+                IconButton(onClick = { showMediaMenu = !showMediaMenu }) {
+                    Icon(
+                        painter = rememberVectorPainter(if (showMediaMenu) Icons.Default.Close else Icons.Default.AttachFile),
+                        contentDescription = "Anexar",
+                        tint              = if (showMediaMenu) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                    )
+                }
+
+                OutlinedTextField(
+                    value         = text,
+                    onValueChange = onTextChange,
+                    placeholder   = { Text("Mensagem") },
+                    modifier      = Modifier.weight(1f),
+                    singleLine    = false,
+                    maxLines      = 4,
+                    shape         = RoundedCornerShape(20.dp)
                 )
+
+                Spacer(Modifier.width(4.dp))
+
+                IconButton(
+                    onClick  = onSend,
+                    enabled  = text.trim().isNotEmpty(),
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(
+                            if (text.trim().isNotEmpty()) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                ) {
+                    Icon(
+                        painterResource(R.drawable.icon_send),
+                        contentDescription = "Enviar",
+                        tint = if (text.trim().isNotEmpty()) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
 }
 
-// ─── Dialogs de grupo ────────────────────────────────────────────────────────
+@Composable
+private fun MediaMenuButton(
+    icon: @Composable () -> Unit,
+    label: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier            = Modifier.padding(horizontal = 4.dp)
+    ) {
+        IconButton(
+            onClick  = onClick,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(color)
+        ) { icon() }
+        Spacer(Modifier.height(4.dp))
+        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+// ─── Dialogs ─────────────────────────────────────────────────────────────────
 
 @Composable
 private fun PinDialog(isPinned: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title   = { Text(if (isPinned) "Desafixar mensagem" else "Fixar mensagem") },
-        text    = { Text(if (isPinned) "Deseja desafixar esta mensagem?"
-        else "Deseja fixar esta mensagem no topo do chat?") },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Confirmar") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+        title            = { Text(if (isPinned) "Desafixar mensagem" else "Fixar mensagem") },
+        text             = { Text(if (isPinned) "Deseja desafixar esta mensagem?" else "Deseja fixar esta mensagem no topo do chat?") },
+        confirmButton    = { TextButton(onClick = onConfirm) { Text("Confirmar") } },
+        dismissButton    = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
 }
 
@@ -560,32 +668,29 @@ private fun GroupMembersDialog(
     confirmRemove?.let { member ->
         AlertDialog(
             onDismissRequest = { confirmRemove = null },
-            title = { Text("Remover ${member.username}?") },
-            confirmButton = { TextButton(onClick = { onRemove(member.id); confirmRemove = null }) { Text("Remover") } },
-            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Cancelar") } }
+            title            = { Text("Remover ${member.username}?") },
+            confirmButton    = { TextButton(onClick = { onRemove(member.id); confirmRemove = null }) { Text("Remover") } },
+            dismissButton    = { TextButton(onClick = { confirmRemove = null }) { Text("Cancelar") } }
         )
     }
     if (confirmLeave) {
         AlertDialog(
             onDismissRequest = { confirmLeave = false },
-            title = { Text("Sair do grupo?") },
-            text  = { Text("Você não poderá mais ver as mensagens deste grupo.") },
-            confirmButton = { TextButton(onClick = { onLeave(); confirmLeave = false }) { Text("Sair") } },
-            dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Cancelar") } }
+            title            = { Text("Sair do grupo?") },
+            text             = { Text("Você não poderá mais ver as mensagens deste grupo.") },
+            confirmButton    = { TextButton(onClick = { onLeave(); confirmLeave = false }) { Text("Sair") } },
+            dismissButton    = { TextButton(onClick = { confirmLeave = false }) { Text("Cancelar") } }
         )
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Grupo · ${members.size} participante(s)") },
-        text = {
+        title            = { Text("Grupo · ${members.size} participante(s)") },
+        text             = {
             Column {
                 members.forEach { member ->
                     val isSelf = member.id == currentUserId
-                    TextButton(
-                        onClick = { if (!isSelf) confirmRemove = member },
-                        enabled = !isSelf
-                    ) {
+                    TextButton(onClick = { if (!isSelf) confirmRemove = member }, enabled = !isSelf) {
                         Text(if (isSelf) "✓ ${member.username} (Você)" else member.username)
                     }
                 }
@@ -596,53 +701,44 @@ private fun GroupMembersDialog(
                 }
             }
         },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Fechar") } }
+        confirmButton    = {},
+        dismissButton    = { TextButton(onClick = onDismiss) { Text("Fechar") } }
     )
 }
 
 @Composable
-private fun AddMemberDialog(
-    chatroomId: String,
-    onAdd: (String, String) -> Unit,
-    onDismiss: () -> Unit
-) {
+private fun AddMemberDialog(chatroomId: String, onAdd: (String, String) -> Unit, onDismiss: () -> Unit) {
     var username by remember { mutableStateOf("") }
     var error    by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Adicionar participante") },
-        text = {
+        title            = { Text("Adicionar participante") },
+        text             = {
             Column {
                 OutlinedTextField(
-                    value = username,
+                    value         = username,
                     onValueChange = { username = it; error = null },
-                    label = { Text("Username do novo participante") },
-                    isError = error != null,
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp)
+                    label         = { Text("Username do novo participante") },
+                    isError       = error != null,
+                    singleLine    = true,
+                    shape         = RoundedCornerShape(8.dp)
                 )
                 if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
             }
         },
-        confirmButton = {
+        confirmButton    = {
             TextButton(onClick = {
                 if (username.trim().length < 3) { error = "Digite ao menos 3 caracteres"; return@TextButton }
-                onAdd(username.trim(), chatroomId)
-                onDismiss()
+                onAdd(username.trim(), chatroomId); onDismiss()
             }) { Text("Buscar e Adicionar") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+        dismissButton    = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
 }
 
-// ─── Funções auxiliares de gravação e localização (lógica = original) ────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-private data class RecordingState(
-    val isRecording: Boolean,
-    val audioPath: String,
-    val recorder: MediaRecorder?
-)
+private data class RecordingState(val isRecording: Boolean, val audioPath: String, val recorder: MediaRecorder?)
 
 private fun toggleRecording(
     context: android.content.Context,
@@ -651,12 +747,10 @@ private fun toggleRecording(
     currentPath: String
 ): RecordingState {
     return if (isRecording) {
-        // Para gravação
         try { recorder?.stop(); recorder?.release() } catch (e: Exception) { }
         android.widget.Toast.makeText(context, "Áudio gravado", android.widget.Toast.LENGTH_SHORT).show()
         RecordingState(isRecording = false, audioPath = currentPath, recorder = null)
     } else {
-        // Inicia gravação
         val path = "${context.externalCacheDir?.absolutePath}/audio_${System.currentTimeMillis()}.m4a"
         val mr   = MediaRecorder().apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)

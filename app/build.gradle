@@ -60,6 +60,7 @@ dependencies {
     // Room (offline) — usa KSP (compatível com Kotlin 2.x)
     implementation 'androidx.room:room-runtime:2.7.1'
     implementation 'androidx.room:room-ktx:2.7.1'
+    implementation 'androidx.compose.ui:ui:1.10.5'
     ksp 'androidx.room:room-compiler:2.7.1'
 
     // ViewModel e LiveData

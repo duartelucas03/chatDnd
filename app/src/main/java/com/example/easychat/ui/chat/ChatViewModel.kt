@@ -290,6 +290,21 @@ class ChatViewModel(
         }
     }
 
+    fun sendVideoMessage(uri: android.net.Uri, contentResolver: android.content.ContentResolver) {
+        val chatroomId = _chatroom.value?.id ?: return
+        _isUploading.value = true
+        viewModelScope.launch {
+            try {
+                val bytes = contentResolver.openInputStream(uri)?.readBytes() ?: return@launch
+                val url   = mediaRepository.uploadVideo(chatroomId, bytes)
+                chatRepository.sendMessage(chatroomId, currentUserId, "", "video", mediaUrl = url)
+                _messageSent.value = true
+            } catch (e: Exception) {
+                _error.value = "Erro ao enviar vídeo: ${e.message}"
+            } finally { _isUploading.value = false }
+        }
+    }
+
     fun sendLocationMessage(lat: Double, lng: Double) {
         val chatroomId = _chatroom.value?.id ?: return
         viewModelScope.launch {
